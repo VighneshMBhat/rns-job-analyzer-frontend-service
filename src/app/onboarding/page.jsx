@@ -59,7 +59,7 @@ const GitHubIcon = ({ className = '', size = 24, connected = false }) => (
 
 function OnboardingPage() {
     const router = useRouter()
-    const { completeProfile, user, connectGitHub, githubConnection, updateProfile } = useAuth()
+    const { completeProfile, user, connectGitHub, githubConnection, updateProfile, checkGithubConnection } = useAuth()
     const fileInputRef = useRef(null)
 
     const [step, setStep] = useState(1)
@@ -68,6 +68,7 @@ function OnboardingPage() {
     const [githubLoading, setGithubLoading] = useState(false)
     const [githubError, setGithubError] = useState('')
     const [githubSkipped, setGithubSkipped] = useState(false)
+    const [isRestored, setIsRestored] = useState(false)
 
     const [formData, setFormData] = useState({
         targetRoles: [], // Changed from targetRole (string) to targetRoles (array)
@@ -76,6 +77,75 @@ function OnboardingPage() {
         resumeFile: null,
         resumeUrl: ''
     })
+
+    // Restore step and form data from localStorage on mount
+    useEffect(() => {
+        // Only run on client side
+        if (typeof window === 'undefined') return
+
+        // Check if returning from GitHub OAuth
+        const savedStep = localStorage.getItem('onboarding_step')
+        const savedFormData = localStorage.getItem('onboarding_form_data')
+        const githubPending = localStorage.getItem('github_connection_pending')
+
+        console.log('[Onboarding] Restoring state:', { savedStep, githubPending, hasFormData: !!savedFormData })
+
+        // Restore step
+        if (savedStep) {
+            const parsedStep = parseInt(savedStep, 10)
+            if (parsedStep >= 1 && parsedStep <= 4) {
+                console.log('[Onboarding] Restoring to step:', parsedStep)
+                setStep(parsedStep)
+            }
+        }
+
+        // Restore form data (excluding file which can't be serialized)
+        if (savedFormData) {
+            try {
+                const parsed = JSON.parse(savedFormData)
+                setFormData(prev => ({
+                    ...prev,
+                    targetRoles: parsed.targetRoles || [],
+                    experienceLevel: parsed.experienceLevel || '',
+                    domain: parsed.domain || ''
+                    // Note: resumeFile cannot be restored from localStorage
+                }))
+                console.log('[Onboarding] Restored form data:', parsed)
+            } catch (e) {
+                console.warn('[Onboarding] Failed to parse saved form data:', e)
+            }
+        }
+
+        // If returning from GitHub OAuth, also refresh the connection status
+        if (githubPending && user?.id) {
+            console.log('[Onboarding] Checking GitHub connection status after OAuth return')
+            checkGithubConnection(user.id)
+            localStorage.removeItem('github_connection_pending')
+        }
+
+        setIsRestored(true)
+    }, [user?.id, checkGithubConnection])
+
+    // Persist step to localStorage when it changes (except on initial load)
+    useEffect(() => {
+        if (isRestored && typeof window !== 'undefined') {
+            localStorage.setItem('onboarding_step', step.toString())
+            console.log('[Onboarding] Saved step to localStorage:', step)
+        }
+    }, [step, isRestored])
+
+    // Persist form data to localStorage when it changes (except on initial load)
+    useEffect(() => {
+        if (isRestored && typeof window !== 'undefined') {
+            // Only save serializable data (not the file)
+            const dataToSave = {
+                targetRoles: formData.targetRoles,
+                experienceLevel: formData.experienceLevel,
+                domain: formData.domain
+            }
+            localStorage.setItem('onboarding_form_data', JSON.stringify(dataToSave))
+        }
+    }, [formData.targetRoles, formData.experienceLevel, formData.domain, isRestored])
 
     // Redirect to dashboard if onboarding already completed
     useEffect(() => {
@@ -191,16 +261,35 @@ function OnboardingPage() {
         setGithubError('')
 
         try {
+            // Save that we want to go to step 4 (Resume) after GitHub OAuth completes
+            // This is critical because the OAuth redirect will cause the page to reload
+            localStorage.setItem('onboarding_step', '4')
+            localStorage.setItem('github_connection_pending', 'true')
+
+            // Also save current form data before redirect
+            const dataToSave = {
+                targetRoles: formData.targetRoles,
+                experienceLevel: formData.experienceLevel,
+                domain: formData.domain
+            }
+            localStorage.setItem('onboarding_form_data', JSON.stringify(dataToSave))
+            console.log('[Onboarding] Saved state before GitHub OAuth:', { step: 4, formData: dataToSave })
+
             // The connectGitHub function will redirect to GitHub OAuth
             const result = connectGitHub()
             if (!result.success) {
                 setGithubError(result.error || 'Failed to connect GitHub')
                 setGithubLoading(false)
+                // Revert step to 3 since GitHub connection failed
+                localStorage.setItem('onboarding_step', '3')
+                localStorage.removeItem('github_connection_pending')
             }
             // If successful, user will be redirected to GitHub OAuth
         } catch (err) {
             setGithubError('Failed to connect to GitHub. Please try again.')
             setGithubLoading(false)
+            localStorage.setItem('onboarding_step', '3')
+            localStorage.removeItem('github_connection_pending')
         }
     }
 
