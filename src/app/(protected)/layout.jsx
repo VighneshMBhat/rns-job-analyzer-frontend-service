@@ -7,25 +7,33 @@ import Sidebar from '../../components/layout/Sidebar'
 import './protected-layout.css'
 
 export default function ProtectedLayout({ children }) {
-    const { user, loading } = useAuth()
+    const { user, loading, isAuthenticated } = useAuth()
     const router = useRouter()
 
     useEffect(() => {
-        if (!loading && !user) {
+        // Redirect to login if not authenticated and not loading
+        if (!loading && !isAuthenticated) {
             router.push('/login')
         }
-    }, [user, loading, router])
+    }, [isAuthenticated, loading, router])
 
+    // Show loading spinner while checking authentication
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] text-[var(--text-primary)]">
+            <div className="protected-loading">
                 <div className="spinner"></div>
+                <p>Loading...</p>
             </div>
         )
     }
 
-    if (!user) {
-        return null // Will redirect
+    // Don't render anything while redirecting
+    if (!isAuthenticated) {
+        return (
+            <div className="protected-loading">
+                <p>Redirecting to login...</p>
+            </div>
+        )
     }
 
     return (

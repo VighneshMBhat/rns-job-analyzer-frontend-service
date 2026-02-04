@@ -5,14 +5,14 @@ import { createClient } from '@supabase/supabase-js'
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const AWS_LAMBDA_AUTH_URL = process.env.NEXT_PUBLIC_AWS_LAMBDA_AUTH_URL
+const AUTH_API_URL = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://qagyzk8zze.execute-api.us-east-1.amazonaws.com/Prod'
 
 // --- Supabase Client ---
 export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
     ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
     : null
 
-// --- Axios Instance ---
+// --- Axios Instance for general API calls ---
 const api = axios.create({
     baseURL: API_URL,
     headers: {
@@ -20,12 +20,20 @@ const api = axios.create({
     }
 })
 
-// Add request interceptor to attach token
+// --- Axios Instance for Auth API ---
+const authAxios = axios.create({
+    baseURL: AUTH_API_URL,
+    headers: {
+        'Content-Type': 'application/json'
+    }
+})
+
+// Add request interceptor to attach token to API calls
 api.interceptors.request.use((config) => {
     if (typeof window !== 'undefined') {
-        const user = JSON.parse(localStorage.getItem('user'))
-        if (user?.token) {
-            config.headers.Authorization = `Bearer ${user.token}`
+        const token = localStorage.getItem('access_token')
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`
         }
     }
     return config
@@ -33,60 +41,143 @@ api.interceptors.request.use((config) => {
 
 // --- API Services ---
 
-// Auth Service
+// Auth Service - Integrated with AWS Lambda Authentication
 export const authAPI = {
+    /**
+     * Login with email and password
+     * Uses the authentication service from INTEGRATION.md
+     * Returns: { access_token, token_type }
+     */
     login: async (credentials) => {
-        // Option 1: AWS Lambda Auth (Priority if configured)
-        if (AWS_LAMBDA_AUTH_URL) {
-            try {
-                const response = await axios.post(`${AWS_LAMBDA_AUTH_URL}/login`, credentials)
-                return response
-            } catch (error) {
-                console.warn('AWS Lambda login failed, falling back to mock/local', error)
-            }
-        }
+        try {
+            const response = await authAxios.post('/auth/login', {
+                email: credentials.email,
+                password: credentials.password
+            })
 
-        // Option 2: Mock/Local Fallback
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        if (credentials.email === 'test@example.com' && credentials.password === 'password') {
+            // The API returns { access_token, token_type }
             return {
                 data: {
-                    token: 'mock-jwt-token-aws-style',
-                    user: {
-                        id: '1',
-                        fullName: 'Alex Developer',
-                        email: 'test@example.com',
-                        targetRole: 'Machine Learning Engineer',
-                        experienceLevel: 'mid'
-                    }
+                    access_token: response.data.access_token,
+                    token_type: response.data.token_type
                 }
             }
-        }
-        throw new Error('Invalid credentials')
-    },
-
-    signup: async (data) => {
-        if (AWS_LAMBDA_AUTH_URL) {
-            return await axios.post(`${AWS_LAMBDA_AUTH_URL}/signup`, data)
-        }
-
-        // Mock signup
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        return {
-            data: {
-                token: 'mock-jwt-token',
-                user: {
-                    id: '2',
-                    ...data
-                }
-            }
+        } catch (error) {
+            console.error('Login failed:', error)
+            throw error
         }
     },
 
+    /**
+     * Register a new user with email and password
+     * Uses the authentication service from INTEGRATION.md
+     * Returns: { message, user: { id, email } }
+     */
+    register: async (data) => {
+        try {
+            const response = await authAxios.post('/auth/register', {
+                email: data.email,
+                password: data.password
+            })
+
+            return {
+                data: {
+                    message: response.data.message,
+                    user: response.data.user
+                }
+            }
+        } catch (error) {
+            console.error('Registration failed:', error)
+            throw error
+        }
+    },
+
+    /**
+     * Get current user profile
+     * Requires valid access_token in Authorization header
+     * Returns: { id, email }
+     */
+    getCurrentUser: async (token) => {
+        try {
+            const response = await authAxios.get('/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+
+            return {
+                data: {
+                    id: response.data.id,
+                    email: response.data.email
+                }
+            }
+        } catch (error) {
+            console.error('Get current user failed:', error)
+            throw error
+        }
+    },
+
+    /**
+     * Validate token by calling /auth/me
+     * Returns true if token is valid, false otherwise
+     */
+    validateToken: async (token) => {
+        if (!token) return false
+
+        try {
+            await authAxios.get('/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            return true
+        } catch (error) {
+            console.error('Token validation failed:', error)
+            return false
+        }
+    },
+
+    /**
+     * Sign in with Google using Supabase OAuth
+     * Redirects to Google OAuth flow
+     */
+    signInWithGoogle: async (redirectTo) => {
+        if (!supabase) {
+            throw new Error('Supabase client not configured')
+        }
+
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: redirectTo || `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`
+            }
+        })
+
+        if (error) throw error
+        return { data }
+    },
+
+    /**
+     * Handle Supabase OAuth callback
+     * Extracts session from URL hash
+     */
+    handleOAuthCallback: async () => {
+        if (!supabase) {
+            throw new Error('Supabase client not configured')
+        }
+
+        const { data, error } = await supabase.auth.getSession()
+
+        if (error) throw error
+        return { data }
+    },
+
+    /**
+     * Update user profile
+     */
     updateProfile: async (data) => {
-        // Simulate API call
         return api.put('/users/profile', data).catch(() => {
-            // Fallback for demo
+            // Fallback for demo - save to localStorage
             return { data: { success: true } }
         })
     }
