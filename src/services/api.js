@@ -524,34 +524,47 @@ export const storageAPI = {
                 throw uploadError
             }
 
-            // Get the public URL for the file
-            const { data: urlData } = supabase.storage
-                .from('resumes')
-                .getPublicUrl(uploadData.path)
-
-            const publicUrl = urlData?.publicUrl || uploadData.path
+            // For private buckets, store the storage path instead of public URL
+            // We'll generate signed URLs when viewing
+            const storagePath = uploadData.path
             const uploadedAt = new Date().toISOString()
 
-            console.log('[Storage] Resume uploaded successfully:', { url: publicUrl, path: uploadData.path })
+            console.log('[Storage] Resume uploaded successfully:', { path: storagePath })
 
-            // Update the profiles table with resume info
+            // Update the profiles table with resume storage path
+            // Store path format: {userId}/resume.{ext}
             const { error: profileError } = await supabase
                 .from('profiles')
                 .update({
-                    resume_url: publicUrl,
+                    resume_url: storagePath, // Store path, not public URL
                     resume_uploaded_at: uploadedAt
                 })
                 .eq('id', userId)
 
             if (profileError) {
-                console.warn('[Storage] Failed to update profile with resume URL:', profileError)
+                console.warn('[Storage] Failed to update profile with resume path:', profileError)
                 // Don't throw - the upload succeeded
+            }
+
+            // Generate a signed URL for immediate use
+            let signedUrl = storagePath
+            try {
+                const { data: signedData, error: signedError } = await supabase.storage
+                    .from('resumes')
+                    .createSignedUrl(storagePath, 3600) // 1 hour expiry
+
+                if (!signedError && signedData?.signedUrl) {
+                    signedUrl = signedData.signedUrl
+                }
+            } catch (signedErr) {
+                console.warn('[Storage] Could not create signed URL:', signedErr)
             }
 
             return {
                 data: {
-                    url: publicUrl,
-                    path: uploadData.path,
+                    url: storagePath,
+                    signedUrl: signedUrl,
+                    path: storagePath,
                     filename: file.name,
                     uploadedAt: uploadedAt
                 }
@@ -583,39 +596,54 @@ export const storageAPI = {
                 return null
             }
 
-            // Extract filename from URL
-            // URL format: .../storage/v1/object/public/resumes/{userId}/{filename}
+            // Determine storage path - handle both formats:
+            // 1. Old format: Full URL like https://...supabase.co/storage/v1/object/public/resumes/{userId}/{filename}
+            // 2. New format: Storage path like {userId}/resume.pdf
+            let storagePath = data.resume_url
             let filename = 'Resume.pdf'
-            let storagePath = ''
+
+            // Check if it's a full URL (old format) or just a path (new format)
+            if (data.resume_url.includes('supabase.co') || data.resume_url.startsWith('http')) {
+                // Old URL format - extract path from URL
+                try {
+                    // URL format: .../storage/v1/object/public/resumes/{userId}/{filename}
+                    const urlParts = data.resume_url.split('/resumes/')
+                    if (urlParts.length > 1) {
+                        storagePath = urlParts[1] // Gets "{userId}/{filename}"
+                    }
+                } catch (e) {
+                    console.warn('[Storage] Could not parse path from URL:', e)
+                }
+            }
+
+            // Extract filename from storage path
             try {
-                const urlParts = data.resume_url.split('/')
-                const rawFilename = urlParts[urlParts.length - 1]
-                // Decode URL-encoded characters and clean up
+                const pathParts = storagePath.split('/')
+                const rawFilename = pathParts[pathParts.length - 1]
                 filename = decodeURIComponent(rawFilename) || 'Resume.pdf'
-                // Storage path is {userId}/{filename}
-                storagePath = `${userId}/${rawFilename}`
             } catch (e) {
-                console.warn('[Storage] Could not parse filename from URL:', e)
+                console.warn('[Storage] Could not parse filename:', e)
             }
 
             // Generate a signed URL since the bucket is private
-            let signedUrl = data.resume_url // Fallback to stored URL
-            if (storagePath) {
-                try {
-                    const { data: signedData, error: signedError } = await supabase.storage
-                        .from('resumes')
-                        .createSignedUrl(storagePath, 3600) // 1 hour expiry
+            let signedUrl = null
+            try {
+                const { data: signedData, error: signedError } = await supabase.storage
+                    .from('resumes')
+                    .createSignedUrl(storagePath, 3600) // 1 hour expiry
 
-                    if (!signedError && signedData?.signedUrl) {
-                        signedUrl = signedData.signedUrl
-                    }
-                } catch (signedErr) {
-                    console.warn('[Storage] Could not create signed URL:', signedErr)
+                if (!signedError && signedData?.signedUrl) {
+                    signedUrl = signedData.signedUrl
+                } else {
+                    console.warn('[Storage] Signed URL error:', signedError)
                 }
+            } catch (signedErr) {
+                console.warn('[Storage] Could not create signed URL:', signedErr)
             }
 
             return {
                 url: data.resume_url,
+                storagePath: storagePath,
                 signedUrl: signedUrl,
                 uploadedAt: data.resume_uploaded_at,
                 filename: filename

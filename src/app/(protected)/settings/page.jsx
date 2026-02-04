@@ -117,6 +117,7 @@ function SettingsPage() {
             // Update local resume info state to reflect the change immediately
             setResumeInfo({
                 url: response.data.url,
+                signedUrl: response.data.signedUrl,
                 uploadedAt: response.data.uploadedAt,
                 filename: response.data.filename
             })
