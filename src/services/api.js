@@ -461,8 +461,9 @@ export const reportAPI = {
 export const storageAPI = {
     /**
      * Upload resume to Supabase Storage and update profile
+     * Uses a consistent filename per user so new uploads replace old ones
      * @param {File} file - The resume file to upload
-     * @param {string} userId - The user's ID (optional, for organizing files by user)
+     * @param {string} userId - The user's ID (required for organized storage)
      * @returns {Object} - { data: { url, filename } } or throws error
      */
     uploadResume: async (file, userId = null) => {
@@ -479,15 +480,38 @@ export const storageAPI = {
             }
         }
 
-        try {
-            const fileExt = file.name.split('.').pop()
-            const timestamp = Date.now()
-            // Create unique filename with user ID if available
-            const fileName = userId
-                ? `${userId}/${timestamp}.${fileExt}`
-                : `${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`
+        if (!userId) {
+            console.error('User ID is required for resume upload')
+            throw new Error('User ID is required for resume upload')
+        }
 
-            // Upload to Supabase storage
+        try {
+            const fileExt = file.name.split('.').pop()?.toLowerCase() || 'pdf'
+            // Use a consistent filename so uploads replace each other
+            // Format: {userId}/resume.{ext}
+            const fileName = `${userId}/resume.${fileExt}`
+
+            // First, try to delete any existing resume for this user
+            // This ensures clean replacement
+            try {
+                const { data: existingFiles } = await supabase.storage
+                    .from('resumes')
+                    .list(userId)
+
+                if (existingFiles && existingFiles.length > 0) {
+                    const filesToDelete = existingFiles.map(f => `${userId}/${f.name}`)
+                    console.log('[Storage] Deleting old resumes:', filesToDelete)
+                    await supabase.storage
+                        .from('resumes')
+                        .remove(filesToDelete)
+                }
+            } catch (deleteError) {
+                // If deletion fails, continue with upload (upsert will handle it)
+                console.warn('[Storage] Could not delete old resume:', deleteError)
+            }
+
+            // Upload to Supabase storage with upsert to replace if exists
+            console.log('[Storage] Uploading resume:', fileName)
             const { data: uploadData, error: uploadError } = await supabase.storage
                 .from('resumes')
                 .upload(fileName, file, {
@@ -496,44 +520,109 @@ export const storageAPI = {
                 })
 
             if (uploadError) {
-                console.error('Supabase upload error:', uploadError)
+                console.error('[Storage] Supabase upload error:', uploadError)
                 throw uploadError
             }
 
             // Get the public URL for the file
-            // Note: For private buckets, use createSignedUrl instead
             const { data: urlData } = supabase.storage
                 .from('resumes')
                 .getPublicUrl(uploadData.path)
 
             const publicUrl = urlData?.publicUrl || uploadData.path
+            const uploadedAt = new Date().toISOString()
 
-            // If userId is provided, also update the profiles table
-            if (userId) {
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .update({
-                        resume_url: publicUrl,
-                        resume_uploaded_at: new Date().toISOString()
-                    })
-                    .eq('id', userId)
+            console.log('[Storage] Resume uploaded successfully:', { url: publicUrl, path: uploadData.path })
 
-                if (profileError) {
-                    console.warn('Failed to update profile with resume URL:', profileError)
-                    // Don't throw - the upload succeeded
-                }
+            // Update the profiles table with resume info
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({
+                    resume_url: publicUrl,
+                    resume_uploaded_at: uploadedAt
+                })
+                .eq('id', userId)
+
+            if (profileError) {
+                console.warn('[Storage] Failed to update profile with resume URL:', profileError)
+                // Don't throw - the upload succeeded
             }
 
             return {
                 data: {
                     url: publicUrl,
                     path: uploadData.path,
-                    filename: file.name
+                    filename: file.name,
+                    uploadedAt: uploadedAt
                 }
             }
         } catch (error) {
-            console.error('Resume upload failed:', error)
+            console.error('[Storage] Resume upload failed:', error)
             throw error
+        }
+    },
+
+    /**
+     * Get resume info from profile with signed URL for private bucket access
+     * @param {string} userId - The user's ID
+     * @returns {Object} - { url, signedUrl, uploadedAt, filename } or null
+     */
+    getResumeInfo: async (userId) => {
+        if (!supabase || !userId) {
+            return null
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('resume_url, resume_uploaded_at')
+                .eq('id', userId)
+                .single()
+
+            if (error || !data || !data.resume_url) {
+                return null
+            }
+
+            // Extract filename from URL
+            // URL format: .../storage/v1/object/public/resumes/{userId}/{filename}
+            let filename = 'Resume.pdf'
+            let storagePath = ''
+            try {
+                const urlParts = data.resume_url.split('/')
+                const rawFilename = urlParts[urlParts.length - 1]
+                // Decode URL-encoded characters and clean up
+                filename = decodeURIComponent(rawFilename) || 'Resume.pdf'
+                // Storage path is {userId}/{filename}
+                storagePath = `${userId}/${rawFilename}`
+            } catch (e) {
+                console.warn('[Storage] Could not parse filename from URL:', e)
+            }
+
+            // Generate a signed URL since the bucket is private
+            let signedUrl = data.resume_url // Fallback to stored URL
+            if (storagePath) {
+                try {
+                    const { data: signedData, error: signedError } = await supabase.storage
+                        .from('resumes')
+                        .createSignedUrl(storagePath, 3600) // 1 hour expiry
+
+                    if (!signedError && signedData?.signedUrl) {
+                        signedUrl = signedData.signedUrl
+                    }
+                } catch (signedErr) {
+                    console.warn('[Storage] Could not create signed URL:', signedErr)
+                }
+            }
+
+            return {
+                url: data.resume_url,
+                signedUrl: signedUrl,
+                uploadedAt: data.resume_uploaded_at,
+                filename: filename
+            }
+        } catch (error) {
+            console.error('[Storage] Failed to get resume info:', error)
+            return null
         }
     },
 

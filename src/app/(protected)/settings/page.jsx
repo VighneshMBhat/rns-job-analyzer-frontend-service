@@ -37,6 +37,8 @@ function SettingsPage() {
     const [githubError, setGithubError] = useState('')
     const [githubSuccess, setGithubSuccess] = useState('')
     const [syncLoading, setSyncLoading] = useState(false)
+    const [resumeInfo, setResumeInfo] = useState(null)
+    const [resumeLoading, setResumeLoading] = useState(true)
 
     const [formData, setFormData] = useState({
         fullName: user?.fullName || '',
@@ -68,6 +70,26 @@ function SettingsPage() {
         }
     }, [user?.id, checkGithubConnection])
 
+    // Fetch resume info on mount
+    useEffect(() => {
+        const fetchResumeInfo = async () => {
+            if (!user?.id) {
+                setResumeLoading(false)
+                return
+            }
+
+            try {
+                const info = await storageAPI.getResumeInfo(user.id)
+                setResumeInfo(info)
+            } catch (err) {
+                console.error('Failed to fetch resume info:', err)
+            }
+            setResumeLoading(false)
+        }
+
+        fetchResumeInfo()
+    }, [user?.id])
+
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -91,6 +113,13 @@ function SettingsPage() {
         try {
             // Upload resume with user ID - this also updates the profile in Supabase
             const response = await storageAPI.uploadResume(file, user?.id)
+
+            // Update local resume info state to reflect the change immediately
+            setResumeInfo({
+                url: response.data.url,
+                uploadedAt: response.data.uploadedAt,
+                filename: response.data.filename
+            })
 
             // Also update local context
             await updateProfile({ resumeUrl: response.data.url })
@@ -447,35 +476,126 @@ function SettingsPage() {
                         </div>
 
                         <div className="resume-settings">
-                            <div className="current-resume">
-                                <div className="file-icon">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                        <path d="M14 2v6h6" />
-                                        <path d="M16 13H8" />
-                                        <path d="M16 17H8" />
-                                        <path d="M10 9H8" />
-                                    </svg>
+                            {resumeLoading ? (
+                                <div className="resume-loading">
+                                    <div className="spinner" style={{ width: 24, height: 24 }}></div>
+                                    <span>Loading resume info...</span>
                                 </div>
-                                <div className="file-info">
-                                    <span className="file-name">Current Resume.pdf</span>
-                                    <span className="file-meta">Uploaded on Feb 4, 2024</span>
+                            ) : resumeInfo && resumeInfo.url ? (
+                                <div className="current-resume">
+                                    <div className="file-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <path d="M14 2v6h6" />
+                                            <path d="M16 13H8" />
+                                            <path d="M16 17H8" />
+                                            <path d="M10 9H8" />
+                                        </svg>
+                                    </div>
+                                    <div className="file-info">
+                                        <span className="file-name">
+                                            {resumeInfo.filename || 'Resume.pdf'}
+                                        </span>
+                                        <span className="file-meta">
+                                            Uploaded on {resumeInfo.uploadedAt
+                                                ? new Date(resumeInfo.uploadedAt).toLocaleDateString('en-US', {
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    year: 'numeric'
+                                                })
+                                                : 'Unknown date'
+                                            }
+                                        </span>
+                                    </div>
+                                    <div className="resume-actions">
+                                        <a
+                                            href={resumeInfo.signedUrl || resumeInfo.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="btn btn-ghost btn-sm"
+                                        >
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                                <circle cx="12" cy="12" r="3" />
+                                            </svg>
+                                            View
+                                        </a>
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline btn-sm"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={loading}
+                                        >
+                                            {loading ? (
+                                                <>
+                                                    <div className="spinner" style={{ width: 14, height: 14 }}></div>
+                                                    Uploading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                        <polyline points="17 8 12 3 7 8" />
+                                                        <line x1="12" y1="3" x2="12" y2="15" />
+                                                    </svg>
+                                                    Replace
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".pdf"
+                                        onChange={handleResumeUpload}
+                                        style={{ display: 'none' }}
+                                    />
                                 </div>
-                                <button
-                                    type="button"
-                                    className="btn btn-outline btn-sm"
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    Update
-                                </button>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept=".pdf"
-                                    onChange={handleResumeUpload}
-                                    style={{ display: 'none' }}
-                                />
-                            </div>
+                            ) : (
+                                <div className="no-resume">
+                                    <div className="no-resume-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <path d="M14 2v6h6" />
+                                            <line x1="12" y1="11" x2="12" y2="17" />
+                                            <line x1="9" y1="14" x2="15" y2="14" />
+                                        </svg>
+                                    </div>
+                                    <div className="no-resume-text">
+                                        <h4>No Resume Uploaded</h4>
+                                        <p>Upload your resume to extract skills and enhance your analysis</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={loading}
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="spinner" style={{ width: 18, height: 18 }}></div>
+                                                Uploading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                                    <polyline points="17 8 12 3 7 8" />
+                                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                                </svg>
+                                                Upload Resume
+                                            </>
+                                        )}
+                                    </button>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".pdf"
+                                        onChange={handleResumeUpload}
+                                        style={{ display: 'none' }}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
 
