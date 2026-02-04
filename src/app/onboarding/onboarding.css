@@ -159,6 +159,45 @@
     margin-bottom: var(--space-6);
 }
 
+/* Role Selection Counter */
+.role-selection-counter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+}
+
+.role-selection-counter .counter {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+    padding: var(--space-2) var(--space-4);
+    background: var(--bg-glass);
+    border-radius: var(--radius-full);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all var(--transition-fast);
+}
+
+.role-selection-counter .counter.max-reached {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: var(--primary-500);
+    color: var(--primary-400);
+}
+
+.clear-selection-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    transition: color var(--transition-fast);
+}
+
+.clear-selection-btn:hover {
+    color: var(--error-500);
+}
+
 /* Role Grid */
 .role-grid {
     display: grid;
@@ -167,6 +206,11 @@
 }
 
 .role-card {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
     padding: var(--space-4);
     background: var(--bg-glass);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -176,9 +220,14 @@
     cursor: pointer;
     transition: all var(--transition-fast);
     text-align: center;
+    min-height: 60px;
 }
 
-.role-card:hover {
+.role-card .role-name {
+    flex: 1;
+}
+
+.role-card:hover:not(.disabled) {
     border-color: var(--primary-500);
     background: rgba(99, 102, 241, 0.1);
 }
@@ -187,6 +236,122 @@
     border-color: var(--primary-500);
     background: rgba(99, 102, 241, 0.2);
     box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+.role-card.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.role-card.disabled:hover {
+    background: var(--bg-glass);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Role Check Icon */
+.role-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--success-500);
+    border-radius: 50%;
+    color: #fff;
+}
+
+.role-check svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* Role Order Badge */
+.role-order {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-500);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Selected Roles Summary */
+.selected-roles-summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+    padding: var(--space-4);
+    background: var(--bg-glass);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+}
+
+.summary-label {
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.selected-roles-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.role-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: var(--radius-full);
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.role-tag .tag-order {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-500);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+}
+
+.role-tag .tag-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-radius: 50%;
+    transition: all var(--transition-fast);
+}
+
+.role-tag .tag-remove:hover {
+    color: var(--error-500);
+    background: rgba(239, 68, 68, 0.1);
 }
 
 /* Resume Upload */

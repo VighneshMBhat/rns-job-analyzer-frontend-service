@@ -41,6 +41,9 @@ const DOMAINS = [
     'Other'
 ]
 
+// Maximum number of roles that can be selected
+const MAX_ROLES = 3
+
 // GitHub Icon Component
 const GitHubIcon = ({ className = '', size = 24, connected = false }) => (
     <svg
@@ -67,7 +70,7 @@ function OnboardingPage() {
     const [githubSkipped, setGithubSkipped] = useState(false)
 
     const [formData, setFormData] = useState({
-        targetRole: '',
+        targetRoles: [], // Changed from targetRole (string) to targetRoles (array)
         experienceLevel: '',
         domain: '',
         resumeFile: null,
@@ -87,6 +90,43 @@ function OnboardingPage() {
             [e.target.name]: e.target.value
         })
         setError('')
+    }
+
+    /**
+     * Handle role selection - allows selecting up to MAX_ROLES (3) roles
+     */
+    const handleRoleToggle = (role) => {
+        setError('')
+        const currentRoles = formData.targetRoles
+        const isSelected = currentRoles.includes(role)
+
+        if (isSelected) {
+            // Deselect the role
+            setFormData({
+                ...formData,
+                targetRoles: currentRoles.filter(r => r !== role)
+            })
+        } else {
+            // Check if max limit reached
+            if (currentRoles.length >= MAX_ROLES) {
+                setError(`You can select up to ${MAX_ROLES} roles. Deselect one to choose another.`)
+                return
+            }
+            // Select the role
+            setFormData({
+                ...formData,
+                targetRoles: [...currentRoles, role]
+            })
+        }
+    }
+
+    /**
+     * Check if a role can be selected (not at max limit or already selected)
+     */
+    const isRoleDisabled = (role) => {
+        const currentRoles = formData.targetRoles
+        const isSelected = currentRoles.includes(role)
+        return !isSelected && currentRoles.length >= MAX_ROLES
     }
 
     const handleFileChange = async (e) => {
@@ -112,8 +152,14 @@ function OnboardingPage() {
 
     const handleNext = () => {
         if (step === 1) {
-            if (!formData.targetRole) {
-                setError('Please select a target role')
+            // Validate: at least 1 role must be selected
+            if (formData.targetRoles.length === 0) {
+                setError('Please select at least one target role')
+                return
+            }
+            // Validate: no more than MAX_ROLES
+            if (formData.targetRoles.length > MAX_ROLES) {
+                setError(`You can select up to ${MAX_ROLES} roles`)
                 return
             }
             setStep(2)
@@ -191,14 +237,20 @@ function OnboardingPage() {
                 }
             }
 
-            const result = await completeProfile({
-                targetRole: formData.targetRole,
+            // Build profile data with backward compatibility
+            // - targetRoles: new array format (up to 3 roles)
+            // - targetRole: primary role (first selected) for backward compatibility
+            const profileData = {
+                targetRoles: formData.targetRoles,
+                targetRole: formData.targetRoles[0] || '', // Primary role for backward compatibility
                 experienceLevel: formData.experienceLevel,
                 domain: formData.domain,
                 resumeUrl: resumeUrl,
                 githubConnected: githubConnection.connected,
                 githubSkippedOnboarding: githubSkipped
-            })
+            }
+
+            const result = await completeProfile(profileData)
 
             if (result.success) {
                 router.push('/dashboard')
@@ -241,7 +293,7 @@ function OnboardingPage() {
                 <div className="onboarding-progress">
                     <div className={`progress-step ${step >= 1 ? 'active' : ''}`}>
                         <div className="step-number">1</div>
-                        <span>Target Role</span>
+                        <span>Target Roles</span>
                     </div>
                     <div className="progress-line"></div>
                     <div className={`progress-step ${step >= 2 ? 'active' : ''}`}>
@@ -272,24 +324,86 @@ function OnboardingPage() {
                     </div>
                 )}
 
-                {/* Step 1: Target Role */}
+                {/* Step 1: Target Roles (Multiple Selection) */}
                 {step === 1 && (
                     <div className="onboarding-step">
-                        <h2>What role are you targeting?</h2>
-                        <p>Select the job role you want to work towards</p>
+                        <h2>What roles are you targeting?</h2>
+                        <p>Select up to {MAX_ROLES} job roles you want to work towards</p>
+
+                        {/* Selection Counter */}
+                        <div className="role-selection-counter">
+                            <span className={`counter ${formData.targetRoles.length === MAX_ROLES ? 'max-reached' : ''}`}>
+                                {formData.targetRoles.length} / {MAX_ROLES} selected
+                            </span>
+                            {formData.targetRoles.length > 0 && (
+                                <button
+                                    type="button"
+                                    className="clear-selection-btn"
+                                    onClick={() => setFormData({ ...formData, targetRoles: [] })}
+                                >
+                                    Clear all
+                                </button>
+                            )}
+                        </div>
 
                         <div className="role-grid">
-                            {TARGET_ROLES.map((role) => (
-                                <button
-                                    key={role}
-                                    type="button"
-                                    className={`role-card ${formData.targetRole === role ? 'selected' : ''}`}
-                                    onClick={() => setFormData({ ...formData, targetRole: role })}
-                                >
-                                    {role}
-                                </button>
-                            ))}
+                            {TARGET_ROLES.map((role) => {
+                                const isSelected = formData.targetRoles.includes(role)
+                                const isDisabled = isRoleDisabled(role)
+
+                                return (
+                                    <button
+                                        key={role}
+                                        type="button"
+                                        className={`role-card ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                                        onClick={() => handleRoleToggle(role)}
+                                        disabled={isDisabled}
+                                        aria-pressed={isSelected}
+                                        aria-disabled={isDisabled}
+                                    >
+                                        <span className="role-name">{role}</span>
+                                        {isSelected && (
+                                            <span className="role-check">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                                                    <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                            </span>
+                                        )}
+                                        {isSelected && (
+                                            <span className="role-order">
+                                                {formData.targetRoles.indexOf(role) + 1}
+                                            </span>
+                                        )}
+                                    </button>
+                                )
+                            })}
                         </div>
+
+                        {/* Selected Roles Summary */}
+                        {formData.targetRoles.length > 0 && (
+                            <div className="selected-roles-summary">
+                                <span className="summary-label">Selected:</span>
+                                <div className="selected-roles-tags">
+                                    {formData.targetRoles.map((role, index) => (
+                                        <span key={role} className="role-tag">
+                                            <span className="tag-order">{index + 1}</span>
+                                            {role}
+                                            <button
+                                                type="button"
+                                                className="tag-remove"
+                                                onClick={() => handleRoleToggle(role)}
+                                                aria-label={`Remove ${role}`}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <line x1="18" y1="6" x2="6" y2="18" />
+                                                    <line x1="6" y1="6" x2="18" y2="18" />
+                                                </svg>
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
