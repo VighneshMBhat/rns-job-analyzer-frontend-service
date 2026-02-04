@@ -6,6 +6,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const AUTH_API_URL = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://qagyzk8zze.execute-api.us-east-1.amazonaws.com/Prod'
+const GITHUB_SERVICE_URL = process.env.NEXT_PUBLIC_GITHUB_SERVICE_URL || 'https://12dbzw94lh.execute-api.us-east-1.amazonaws.com/Prod'
 
 // --- Supabase Client ---
 export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
@@ -23,6 +24,14 @@ const api = axios.create({
 // --- Axios Instance for Auth API ---
 const authAxios = axios.create({
     baseURL: AUTH_API_URL,
+    headers: {
+        'Content-Type': 'application/json'
+    }
+})
+
+// --- Axios Instance for GitHub Service ---
+const githubAxios = axios.create({
+    baseURL: GITHUB_SERVICE_URL,
     headers: {
         'Content-Type': 'application/json'
     }
@@ -180,6 +189,128 @@ export const authAPI = {
             // Fallback for demo - save to localStorage
             return { data: { success: true } }
         })
+    }
+}
+
+// GitHub Service - Integrated with AWS Lambda GitHub Service
+export const githubAPI = {
+    /**
+     * Get the GitHub OAuth connect URL
+     * User should be redirected to this URL to start OAuth flow
+     */
+    getConnectUrl: (userId) => {
+        return `${GITHUB_SERVICE_URL}/api/github/connect?user_id=${userId}`
+    },
+
+    /**
+     * Initiate GitHub OAuth connection
+     * Redirects user to GitHub OAuth flow
+     */
+    connectGitHub: (userId) => {
+        if (typeof window !== 'undefined') {
+            window.location.href = `${GITHUB_SERVICE_URL}/api/github/connect?user_id=${userId}`
+        }
+    },
+
+    /**
+     * Check if user has connected GitHub
+     * Queries the github_connections table via Supabase
+     * Returns: { connected: boolean, data: { github_username, last_sync_at } | null }
+     */
+    checkConnection: async (userId) => {
+        if (!supabase) {
+            console.warn('Supabase client not configured')
+            return { connected: false, data: null }
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('github_connections')
+                .select('github_username, github_user_id, last_sync_at, repos_analyzed')
+                .eq('user_id', userId)
+                .single()
+
+            if (error) {
+                // PGRST116 = Row not found (not an actual error in this context)
+                if (error.code === 'PGRST116') {
+                    return { connected: false, data: null }
+                }
+                console.error('Error checking GitHub connection:', error)
+                return { connected: false, data: null, error: error.message }
+            }
+
+            return {
+                connected: !!data,
+                data: data ? {
+                    github_username: data.github_username,
+                    github_user_id: data.github_user_id,
+                    last_sync_at: data.last_sync_at,
+                    repos_analyzed: data.repos_analyzed
+                } : null
+            }
+        } catch (error) {
+            console.error('Error checking GitHub connection:', error)
+            return { connected: false, data: null, error: error.message }
+        }
+    },
+
+    /**
+     * Trigger manual sync of GitHub repositories
+     * POST /api/github/sync/trigger/{user_id}
+     */
+    triggerSync: async (userId) => {
+        try {
+            const response = await githubAxios.post(`/api/github/sync/trigger/${userId}`)
+            return { success: true, data: response.data }
+        } catch (error) {
+            console.error('GitHub sync failed:', error)
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to sync GitHub repositories'
+            }
+        }
+    },
+
+    /**
+     * Trigger resume skill extraction
+     * POST /api/github/sync/resume/{user_id}
+     */
+    syncResume: async (userId) => {
+        try {
+            const response = await githubAxios.post(`/api/github/sync/resume/${userId}`)
+            return { success: true, data: response.data }
+        } catch (error) {
+            console.error('Resume sync failed:', error)
+            return {
+                success: false,
+                error: error.response?.data?.message || 'Failed to extract skills from resume'
+            }
+        }
+    },
+
+    /**
+     * Get user skills from Supabase
+     * Returns skills extracted from GitHub, resume, or manually added
+     */
+    getUserSkills: async (userId) => {
+        if (!supabase) {
+            return { success: false, data: [], error: 'Supabase not configured' }
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('user_skills')
+                .select('skill_name, source, confidence_score, proficiency_level, source_repo')
+                .eq('user_id', userId)
+                .order('proficiency_level', { ascending: false })
+
+            if (error) throw error
+
+            return { success: true, data: data || [] }
+        } catch (error) {
+            console.error('Error fetching user skills:', error)
+            return { success: false, data: [], error: error.message }
+        }
     }
 }
 

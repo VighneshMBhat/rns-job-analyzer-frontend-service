@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../context/AuthContext'
-import { storageAPI } from '../../services/api'
+import { storageAPI, githubAPI } from '../../services/api'
 import './onboarding.css'
 
 const TARGET_ROLES = [
@@ -41,14 +41,30 @@ const DOMAINS = [
     'Other'
 ]
 
+// GitHub Icon Component
+const GitHubIcon = ({ className = '', size = 24, connected = false }) => (
+    <svg
+        className={className}
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill={connected ? '#22c55e' : 'currentColor'}
+    >
+        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+    </svg>
+)
+
 function OnboardingPage() {
     const router = useRouter()
-    const { completeProfile, user } = useAuth()
+    const { completeProfile, user, connectGitHub, githubConnection, updateProfile } = useAuth()
     const fileInputRef = useRef(null)
 
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+    const [githubLoading, setGithubLoading] = useState(false)
+    const [githubError, setGithubError] = useState('')
+    const [githubSkipped, setGithubSkipped] = useState(false)
 
     const [formData, setFormData] = useState({
         targetRole: '',
@@ -57,6 +73,13 @@ function OnboardingPage() {
         resumeFile: null,
         resumeUrl: ''
     })
+
+    // Redirect to dashboard if onboarding already completed
+    useEffect(() => {
+        if (user?.onboardingCompleted) {
+            router.push('/dashboard')
+        }
+    }, [user, router])
 
     const handleChange = (e) => {
         setFormData({
@@ -104,6 +127,9 @@ function OnboardingPage() {
                 return
             }
             setStep(3)
+        } else if (step === 3) {
+            // GitHub step - can be skipped
+            setStep(4)
         }
         setError('')
     }
@@ -111,6 +137,32 @@ function OnboardingPage() {
     const handleBack = () => {
         setStep(step - 1)
         setError('')
+        setGithubError('')
+    }
+
+    const handleConnectGitHub = async () => {
+        setGithubLoading(true)
+        setGithubError('')
+
+        try {
+            // The connectGitHub function will redirect to GitHub OAuth
+            const result = connectGitHub()
+            if (!result.success) {
+                setGithubError(result.error || 'Failed to connect GitHub')
+                setGithubLoading(false)
+            }
+            // If successful, user will be redirected to GitHub OAuth
+        } catch (err) {
+            setGithubError('Failed to connect to GitHub. Please try again.')
+            setGithubLoading(false)
+        }
+    }
+
+    const handleSkipGitHub = async () => {
+        setGithubSkipped(true)
+        // Mark that user skipped GitHub during onboarding (can retry later)
+        await updateProfile({ githubConnectionFailed: false, githubSkippedOnboarding: true })
+        setStep(4)
     }
 
     const handleSubmit = async () => {
@@ -127,13 +179,25 @@ function OnboardingPage() {
             if (formData.resumeFile && !resumeUrl) {
                 const response = await storageAPI.uploadResume(formData.resumeFile)
                 resumeUrl = response.data.url
+
+                // Trigger resume skill extraction if user ID is available
+                if (user?.id) {
+                    try {
+                        await githubAPI.syncResume(user.id)
+                    } catch (syncError) {
+                        console.warn('Resume skill extraction failed:', syncError)
+                        // Don't block onboarding for this
+                    }
+                }
             }
 
             const result = await completeProfile({
                 targetRole: formData.targetRole,
                 experienceLevel: formData.experienceLevel,
                 domain: formData.domain,
-                resumeUrl: resumeUrl
+                resumeUrl: resumeUrl,
+                githubConnected: githubConnection.connected,
+                githubSkippedOnboarding: githubSkipped
             })
 
             if (result.success) {
@@ -147,6 +211,9 @@ function OnboardingPage() {
 
         setLoading(false)
     }
+
+    // Total steps including GitHub
+    const totalSteps = 4
 
     return (
         <div className="onboarding-page">
@@ -184,6 +251,11 @@ function OnboardingPage() {
                     <div className="progress-line"></div>
                     <div className={`progress-step ${step >= 3 ? 'active' : ''}`}>
                         <div className="step-number">3</div>
+                        <span>GitHub</span>
+                    </div>
+                    <div className="progress-line"></div>
+                    <div className={`progress-step ${step >= 4 ? 'active' : ''}`}>
+                        <div className="step-number">4</div>
                         <span>Resume</span>
                     </div>
                 </div>
@@ -263,8 +335,105 @@ function OnboardingPage() {
                     </div>
                 )}
 
-                {/* Step 3: Resume Upload */}
+                {/* Step 3: GitHub Connection */}
                 {step === 3 && (
+                    <div className="onboarding-step">
+                        <h2>Connect Your GitHub</h2>
+                        <p>We'll analyze your repositories to extract your technical skills automatically</p>
+
+                        <div className="github-connect-section">
+                            {githubConnection.connected ? (
+                                <div className="github-connected-card">
+                                    <div className="github-connected-icon">
+                                        <GitHubIcon size={48} connected={true} />
+                                    </div>
+                                    <div className="github-connected-info">
+                                        <h3>GitHub Connected!</h3>
+                                        <p>Connected as <strong>@{githubConnection.data?.github_username}</strong></p>
+                                    </div>
+                                    <div className="github-connected-badge">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <polyline points="20 6 9 17 4 12" />
+                                        </svg>
+                                        Connected
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="github-connect-card">
+                                        <div className="github-icon-wrapper">
+                                            <GitHubIcon size={64} />
+                                        </div>
+                                        <h3>Enhance Your Profile</h3>
+                                        <p>Connect GitHub to automatically extract skills from your repositories</p>
+
+                                        <ul className="github-benefits">
+                                            <li>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                                                    <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Automatic skill detection from READMEs
+                                            </li>
+                                            <li>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                                                    <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                AI-powered technology analysis
+                                            </li>
+                                            <li>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                                                    <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Weekly skill updates from new commits
+                                            </li>
+                                        </ul>
+
+                                        {githubError && (
+                                            <div className="github-error">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <circle cx="12" cy="12" r="10" />
+                                                    <line x1="12" y1="8" x2="12" y2="12" />
+                                                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                                                </svg>
+                                                {githubError}
+                                            </div>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            className="btn btn-github"
+                                            onClick={handleConnectGitHub}
+                                            disabled={githubLoading}
+                                        >
+                                            {githubLoading ? (
+                                                <>
+                                                    <div className="spinner" style={{ width: 20, height: 20 }}></div>
+                                                    Connecting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <GitHubIcon size={20} />
+                                                    Connect to GitHub
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        className="btn btn-text skip-github-btn"
+                                        onClick={handleSkipGitHub}
+                                    >
+                                        Skip for now, I'll connect later
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Step 4: Resume Upload */}
+                {step === 4 && (
                     <div className="onboarding-step">
                         <h2>Upload your resume</h2>
                         <p>We'll extract your skills and compare them with market requirements</p>
@@ -350,6 +519,16 @@ function OnboardingPage() {
                         >
                             Continue
                         </button>
+                    ) : step === 3 ? (
+                        githubConnection.connected ? (
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleNext}
+                            >
+                                Continue
+                            </button>
+                        ) : null // GitHub step shows its own buttons
                     ) : (
                         <button
                             type="button"
