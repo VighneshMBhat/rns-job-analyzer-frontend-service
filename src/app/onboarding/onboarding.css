@@ -1,0 +1,309 @@
+.onboarding-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Background */
+.onboarding-background {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.onboarding-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(120px);
+    opacity: 0.4;
+}
+
+.onboarding-orb-1 {
+    width: 600px;
+    height: 600px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    top: -200px;
+    left: -100px;
+}
+
+.onboarding-orb-2 {
+    width: 400px;
+    height: 400px;
+    background: linear-gradient(135deg, #0ea5e9 0%, #22d3ee 100%);
+    bottom: -100px;
+    right: -100px;
+}
+
+/* Container */
+.onboarding-container {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 700px;
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-2xl);
+    padding: var(--space-10);
+    backdrop-filter: blur(20px);
+}
+
+/* Header */
+.onboarding-header {
+    text-align: center;
+    margin-bottom: var(--space-8);
+}
+
+.onboarding-logo {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--space-4);
+    color: var(--primary-400);
+}
+
+.onboarding-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: var(--space-2);
+}
+
+.onboarding-header p {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Progress */
+.onboarding-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-8);
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    opacity: 0.5;
+    transition: opacity var(--transition-fast);
+}
+
+.progress-step.active {
+    opacity: 1;
+}
+
+.step-number {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-glass);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all var(--transition-base);
+}
+
+.progress-step.active .step-number {
+    background: var(--gradient-primary);
+    border-color: transparent;
+}
+
+.progress-step span {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.progress-line {
+    width: 60px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    margin-bottom: 24px;
+}
+
+/* Error */
+.onboarding-error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-lg);
+    color: var(--error-500);
+    font-size: 0.875rem;
+    margin-bottom: var(--space-6);
+}
+
+/* Step Content */
+.onboarding-step {
+    margin-bottom: var(--space-8);
+}
+
+.onboarding-step h2 {
+    font-size: 1.25rem;
+    margin-bottom: var(--space-2);
+    text-align: center;
+}
+
+.onboarding-step>p {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-6);
+}
+
+/* Role Grid */
+.role-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-3);
+}
+
+.role-card {
+    padding: var(--space-4);
+    background: var(--bg-glass);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-lg);
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    text-align: center;
+}
+
+.role-card:hover {
+    border-color: var(--primary-500);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.role-card.selected {
+    border-color: var(--primary-500);
+    background: rgba(99, 102, 241, 0.2);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+}
+
+/* Resume Upload */
+.resume-upload {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-10);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-xl);
+    background: var(--bg-glass);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    text-align: center;
+}
+
+.resume-upload:hover {
+    border-color: var(--primary-500);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.resume-upload.has-file {
+    border-style: solid;
+    border-color: var(--success-500);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.upload-icon {
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-4);
+}
+
+.upload-text {
+    font-size: 1rem;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+}
+
+/* Resume Preview */
+.resume-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    width: 100%;
+}
+
+.resume-preview svg {
+    color: var(--success-500);
+    flex-shrink: 0;
+}
+
+.resume-info {
+    flex: 1;
+    text-align: left;
+}
+
+.resume-name {
+    display: block;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.resume-size {
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+}
+
+/* Resume Note */
+.resume-note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    color: var(--info-500);
+}
+
+/* Actions */
+.onboarding-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.onboarding-actions .btn {
+    flex: 1;
+}
+
+.onboarding-actions .btn-secondary {
+    flex: 0.5;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .onboarding-container {
+        padding: var(--space-6);
+    }
+
+    .role-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .progress-step span {
+        display: none;
+    }
+
+    .progress-line {
+        margin-bottom: 0;
+    }
+}

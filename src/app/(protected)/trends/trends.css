@@ -1,0 +1,448 @@
+.trends-page {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.trends-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: var(--space-4);
+}
+
+.page-header {
+    margin-bottom: var(--space-8);
+}
+
+.page-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: var(--space-2);
+}
+
+.page-header p {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Market Overview */
+.market-overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+}
+
+.overview-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+}
+
+.overview-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--gradient-primary);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.overview-icon svg {
+    width: 24px;
+    height: 24px;
+    color: white;
+}
+
+.overview-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.overview-label {
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+}
+
+/* Tabs */
+.trends-tabs {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-6);
+    background: var(--bg-glass);
+    padding: var(--space-1);
+    border-radius: var(--radius-lg);
+    width: fit-content;
+}
+
+.tab-btn {
+    padding: var(--space-3) var(--space-6);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    background: var(--gradient-primary);
+    color: white;
+}
+
+/* Tab Content */
+.tab-content {
+    margin-bottom: var(--space-8);
+}
+
+/* Trends Grid */
+.trends-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--space-4);
+}
+
+.trend-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-xl);
+    padding: var(--space-5);
+    transition: all var(--transition-fast);
+}
+
+.trend-card:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.trend-rank {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--primary-400);
+    min-width: 40px;
+}
+
+.trend-info {
+    flex: 1;
+}
+
+.trend-info h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+}
+
+.trend-stats .stat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+}
+
+.trend-stats .stat-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.trend-stats .stat-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.trend-stats .stat-bar .progress {
+    flex: 1;
+}
+
+.trend-stats .stat-value {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.trend-growth {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+}
+
+.trend-growth.positive {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--success-500);
+}
+
+.trend-growth.negative {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error-500);
+}
+
+.trend-growth svg {
+    width: 20px;
+    height: 20px;
+}
+
+.trend-growth span {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* Skills Table */
+.skills-table {
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+}
+
+.table-header {
+    display: grid;
+    grid-template-columns: 2fr 1fr 2fr 1fr;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    background: var(--bg-glass);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.table-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 2fr 1fr;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    align-items: center;
+    transition: background var(--transition-fast);
+}
+
+.table-row:last-child {
+    border-bottom: none;
+}
+
+.table-row:hover {
+    background: var(--bg-glass);
+}
+
+.skill-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.skill-rank {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    min-width: 24px;
+}
+
+.skill-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.count-cell {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.bar-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.bar-cell .progress {
+    flex: 1;
+}
+
+.bar-cell span {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    min-width: 40px;
+    text-align: right;
+}
+
+.trend-cell {
+    text-align: center;
+}
+
+.trend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: var(--radius-full);
+}
+
+.trend-badge.rising {
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success-500);
+}
+
+.trend-badge.stable {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--info-500);
+}
+
+.trend-badge.declining {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error-500);
+}
+
+/* Emerging Grid */
+.emerging-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-6);
+}
+
+.emerging-card {
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+}
+
+.emerging-card.emerging {
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.emerging-card.declining {
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.emerging-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.emerging-header svg {
+    width: 24px;
+    height: 24px;
+}
+
+.emerging-card.emerging .emerging-header svg {
+    color: var(--success-500);
+}
+
+.emerging-card.declining .emerging-header svg {
+    color: var(--error-500);
+}
+
+.emerging-header h3 {
+    font-size: 1.125rem;
+}
+
+.emerging-card>p {
+    font-size: 0.875rem;
+    margin-bottom: var(--space-4);
+}
+
+.emerging-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+}
+
+.emerging-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: var(--bg-glass);
+    border-radius: var(--radius-full);
+}
+
+.hot-badge {
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: white;
+    background: var(--success-600);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.cold-badge {
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: white;
+    background: var(--error-600);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+}
+
+.emerging-item .skill-name {
+    font-size: 0.875rem;
+}
+
+/* Last Updated */
+.last-updated {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .market-overview {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .emerging-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .market-overview {
+        grid-template-columns: 1fr;
+    }
+
+    .trends-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .table-header,
+    .table-row {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .bar-cell,
+    .trend-cell:nth-child(3),
+    .table-header span:nth-child(3) {
+        display: none;
+    }
+
+    .trends-tabs {
+        width: 100%;
+        overflow-x: auto;
+    }
+}

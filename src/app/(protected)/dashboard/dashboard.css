@@ -1,0 +1,458 @@
+.dashboard-page {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.dashboard-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: var(--space-4);
+}
+
+/* Header */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-8);
+}
+
+.dashboard-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: var(--space-1);
+}
+
+.dashboard-header p {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Stats Cards */
+.dashboard-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.stat-card {
+    position: relative;
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+}
+
+.stat-card-primary::before {
+    background: var(--gradient-primary);
+}
+
+.stat-card-secondary::before {
+    background: var(--gradient-secondary);
+}
+
+.stat-card-accent::before {
+    background: var(--gradient-accent);
+}
+
+.stat-card-info::before {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+}
+
+.stat-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--bg-glass);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-4);
+}
+
+.stat-icon svg {
+    width: 24px;
+    height: 24px;
+    color: var(--primary-400);
+}
+
+.stat-card-secondary .stat-icon svg {
+    color: var(--secondary-400);
+}
+
+.stat-card-accent .stat-icon svg {
+    color: var(--accent-400);
+}
+
+.stat-card-info .stat-icon svg {
+    color: #3b82f6;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-1);
+}
+
+.stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.stat-change {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.stat-change.positive {
+    color: var(--success-500);
+}
+
+.stat-change.negative {
+    color: var(--error-500);
+}
+
+.stat-chart {
+    position: absolute;
+    bottom: var(--space-4);
+    right: var(--space-4);
+    width: 80px;
+    height: 30px;
+    color: var(--primary-400);
+    opacity: 0.5;
+}
+
+.stat-progress {
+    margin-top: var(--space-3);
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-6);
+    margin-bottom: var(--space-8);
+}
+
+.dashboard-card {
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-6);
+}
+
+.card-header h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.card-link {
+    font-size: 0.875rem;
+    color: var(--primary-400);
+}
+
+/* Skills List */
+.skills-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.skill-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.skill-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.skill-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.skill-priority {
+    font-size: 0.75rem;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+}
+
+.priority-high {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--error-500);
+}
+
+.priority-medium {
+    background: rgba(234, 179, 8, 0.2);
+    color: var(--warning-500);
+}
+
+.priority-low {
+    background: rgba(34, 197, 94, 0.2);
+    color: var(--success-500);
+}
+
+.skill-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.skill-bar .progress {
+    flex: 1;
+}
+
+.skill-percentage {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    width: 35px;
+    text-align: right;
+}
+
+/* Roles List */
+.roles-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.role-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-3);
+    background: var(--bg-glass);
+    border-radius: var(--radius-lg);
+    transition: background var(--transition-fast);
+}
+
+.role-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.role-rank {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    width: 30px;
+}
+
+.role-info {
+    flex: 1;
+}
+
+.role-title {
+    display: block;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--space-1);
+}
+
+.role-demand {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.role-growth {
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.role-growth.positive {
+    color: var(--success-500);
+}
+
+.role-growth.negative {
+    color: var(--error-500);
+}
+
+/* Matched Skills */
+.matched-skills {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.matched-skill {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3);
+    background: var(--bg-glass);
+    border-radius: var(--radius-lg);
+}
+
+.matched-skill-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.matched-skill-level {
+    display: flex;
+    gap: var(--space-1);
+}
+
+.level-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.level-dot.filled {
+    background: var(--success-500);
+}
+
+/* Quick Actions */
+.quick-actions-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    flex: 1;
+}
+
+.quick-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-5);
+    background: var(--bg-glass);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.quick-action:hover {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: var(--primary-500);
+    transform: translateY(-2px);
+}
+
+.quick-action-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--gradient-primary);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.quick-action-icon svg {
+    width: 22px;
+    height: 22px;
+    color: white;
+}
+
+.quick-action span {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Emerging Skills Alert */
+.emerging-skills-alert {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-5);
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(239, 68, 68, 0.1) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: var(--radius-xl);
+}
+
+.alert-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    background: rgba(245, 158, 11, 0.2);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.alert-icon svg {
+    width: 24px;
+    height: 24px;
+    color: var(--accent-400);
+}
+
+.alert-content {
+    flex: 1;
+}
+
+.alert-content h3 {
+    font-size: 1rem;
+    margin-bottom: var(--space-1);
+}
+
+.alert-content p {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .dashboard-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-4);
+    }
+
+    .dashboard-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .emerging-skills-alert {
+        flex-direction: column;
+        text-align: center;
+    }
+}

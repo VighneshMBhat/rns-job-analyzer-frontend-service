@@ -1,0 +1,217 @@
+.reports-page {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.reports-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: var(--space-4);
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-8);
+}
+
+.page-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: var(--space-2);
+}
+
+.page-header p {
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Reports Container */
+.reports-container {
+    margin-bottom: var(--space-8);
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12);
+    background: var(--bg-card);
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-xl);
+    text-align: center;
+}
+
+.empty-state svg {
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-6);
+}
+
+.empty-state h3 {
+    font-size: 1.25rem;
+    margin-bottom: var(--space-2);
+}
+
+.empty-state p {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-6);
+    max-width: 400px;
+}
+
+/* Reports List */
+.reports-grid {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.report-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    background: var(--bg-card);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    transition: all var(--transition-fast);
+}
+
+.report-card:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateX(4px);
+}
+
+.report-icon {
+    width: 48px;
+    height: 48px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--error-500);
+}
+
+.report-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.report-info {
+    flex: 1;
+}
+
+.report-info h3 {
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: var(--space-1);
+    color: var(--text-primary);
+}
+
+.report-metadata {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    font-size: 0.875rem;
+}
+
+.report-date {
+    color: var(--text-tertiary);
+}
+
+.report-status {
+    text-transform: capitalize;
+    font-weight: 500;
+}
+
+.status-completed {
+    color: var(--success-500);
+}
+
+.status-pending {
+    color: var(--warning-500);
+}
+
+.status-failed {
+    color: var(--error-500);
+}
+
+.status-sent {
+    color: var(--info-500);
+}
+
+.report-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.email-status {
+    padding: var(--space-2);
+    color: var(--text-tertiary);
+}
+
+.email-status .sent {
+    color: var(--success-500);
+}
+
+.email-status .pending {
+    color: var(--text-tertiary);
+    opacity: 0.5;
+}
+
+/* Info Card */
+.info-card {
+    display: flex;
+    gap: var(--space-4);
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+}
+
+.info-icon {
+    flex-shrink: 0;
+    width: 24px;
+    color: var(--info-500);
+    margin-top: var(--space-1);
+}
+
+.info-content h3 {
+    font-size: 1rem;
+    margin-bottom: var(--space-2);
+    color: var(--info-500);
+}
+
+.info-content p {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-4);
+    }
+
+    .report-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .report-actions {
+        width: 100%;
+        justify-content: space-between;
+        margin-top: var(--space-2);
+        padding-top: var(--space-4);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+}
