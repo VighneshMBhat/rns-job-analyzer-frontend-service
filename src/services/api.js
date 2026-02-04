@@ -459,39 +459,104 @@ export const reportAPI = {
 
 // Storage Service (Supabase Integration)
 export const storageAPI = {
-    uploadResume: async (file) => {
+    /**
+     * Upload resume to Supabase Storage and update profile
+     * @param {File} file - The resume file to upload
+     * @param {string} userId - The user's ID (optional, for organizing files by user)
+     * @returns {Object} - { data: { url, filename } } or throws error
+     */
+    uploadResume: async (file, userId = null) => {
         // Use Supabase Storage if configured
-        if (supabase) {
-            try {
-                const fileExt = file.name.split('.').pop()
-                const fileName = `${Math.random()}.${fileExt}`
-                const filePath = `${fileName}`
-
-                const { data, error } = await supabase.storage
-                    .from('resumes')
-                    .upload(filePath, file)
-
-                if (error) throw error
-
-                return {
-                    data: {
-                        url: data.path, // In real app, generate public URL or signed URL
-                        filename: file.name
-                    }
+        if (!supabase) {
+            console.warn('Supabase not configured, using mock storage')
+            // Mock Fallback
+            await new Promise(resolve => setTimeout(resolve, 1500))
+            return {
+                data: {
+                    url: `https://storage.mock.com/resumes/${file.name}`,
+                    filename: file.name
                 }
-            } catch (error) {
-                console.error('Supabase upload failed:', error)
-                // Fallthrough to mock
             }
         }
 
-        // Mock Fallback
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        return {
-            data: {
-                url: `https://storage.mock.com/resumes/${file.name}`,
-                filename: file.name
+        try {
+            const fileExt = file.name.split('.').pop()
+            const timestamp = Date.now()
+            // Create unique filename with user ID if available
+            const fileName = userId
+                ? `${userId}/${timestamp}.${fileExt}`
+                : `${timestamp}_${Math.random().toString(36).substring(7)}.${fileExt}`
+
+            // Upload to Supabase storage
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('resumes')
+                .upload(fileName, file, {
+                    cacheControl: '3600',
+                    upsert: true // Replace if exists
+                })
+
+            if (uploadError) {
+                console.error('Supabase upload error:', uploadError)
+                throw uploadError
             }
+
+            // Get the public URL for the file
+            // Note: For private buckets, use createSignedUrl instead
+            const { data: urlData } = supabase.storage
+                .from('resumes')
+                .getPublicUrl(uploadData.path)
+
+            const publicUrl = urlData?.publicUrl || uploadData.path
+
+            // If userId is provided, also update the profiles table
+            if (userId) {
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .update({
+                        resume_url: publicUrl,
+                        resume_uploaded_at: new Date().toISOString()
+                    })
+                    .eq('id', userId)
+
+                if (profileError) {
+                    console.warn('Failed to update profile with resume URL:', profileError)
+                    // Don't throw - the upload succeeded
+                }
+            }
+
+            return {
+                data: {
+                    url: publicUrl,
+                    path: uploadData.path,
+                    filename: file.name
+                }
+            }
+        } catch (error) {
+            console.error('Resume upload failed:', error)
+            throw error
+        }
+    },
+
+    /**
+     * Get a signed URL for a resume (for private buckets)
+     * @param {string} path - The path to the file in storage
+     * @param {number} expiresIn - Seconds until URL expires (default 1 hour)
+     */
+    getSignedUrl: async (path, expiresIn = 3600) => {
+        if (!supabase) {
+            return { url: path, error: 'Supabase not configured' }
+        }
+
+        try {
+            const { data, error } = await supabase.storage
+                .from('resumes')
+                .createSignedUrl(path, expiresIn)
+
+            if (error) throw error
+            return { url: data.signedUrl }
+        } catch (error) {
+            console.error('Failed to get signed URL:', error)
+            return { url: path, error: error.message }
         }
     }
 }

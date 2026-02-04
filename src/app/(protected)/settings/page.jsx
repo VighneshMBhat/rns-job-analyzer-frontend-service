@@ -87,8 +87,12 @@ function SettingsPage() {
         }
 
         setLoading(true)
+        setError('')
         try {
-            const response = await storageAPI.uploadResume(file)
+            // Upload resume with user ID - this also updates the profile in Supabase
+            const response = await storageAPI.uploadResume(file, user?.id)
+
+            // Also update local context
             await updateProfile({ resumeUrl: response.data.url })
 
             // Trigger resume skill extraction
@@ -97,13 +101,15 @@ function SettingsPage() {
                     await githubAPI.syncResume(user.id)
                     setSuccess('Resume updated and skills extracted successfully')
                 } catch (syncError) {
+                    console.warn('Resume skill extraction failed:', syncError)
                     setSuccess('Resume updated successfully')
                 }
             } else {
                 setSuccess('Resume updated successfully')
             }
         } catch (err) {
-            setError('Failed to upload resume')
+            console.error('Resume upload error:', err)
+            setError('Failed to upload resume. Please try again.')
         }
         setLoading(false)
     }

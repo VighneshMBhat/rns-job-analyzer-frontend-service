@@ -1,22 +1,86 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../../context/AuthContext'
-import { mlAPI, jobMarketAPI } from '../../../services/api'
+import { mlAPI, jobMarketAPI, githubAPI } from '../../../services/api'
 import './dashboard.css'
 
-function DashboardPage() {
-    const { user } = useAuth()
+function DashboardPageContent() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
+    const { user, checkGithubConnection } = useAuth()
     const [loading, setLoading] = useState(true)
+    const [notification, setNotification] = useState({ show: false, type: '', message: '' })
     const [data, setData] = useState({
         latestAnalysis: null,
         trendingRoles: [],
         marketSnapshot: null
     })
 
+    // Handle GitHub OAuth callback and onboarding redirect
+    useEffect(() => {
+        const feature = searchParams?.get('feature')
+        const errorParam = searchParams?.get('error')
+        const detail = searchParams?.get('detail')
+
+        // Check if user needs to complete onboarding
+        if (!user?.onboardingCompleted) {
+            // If coming from GitHub OAuth during onboarding, go back to onboarding step 4
+            if (feature === 'github_connected') {
+                localStorage.setItem('onboarding_step', '4')
+                localStorage.removeItem('github_connection_pending')
+            }
+            router.push('/onboarding')
+            return
+        }
+
+        // Handle GitHub connected success
+        if (feature === 'github_connected' && user?.id) {
+            setNotification({
+                show: true,
+                type: 'success',
+                message: 'GitHub connected successfully! Your repositories will be synced shortly.'
+            })
+
+            // Refresh GitHub connection status
+            checkGithubConnection(user.id)
+
+            // Optionally trigger sync
+            githubAPI.triggerSync(user.id).catch(err => {
+                console.warn('Auto-sync failed:', err)
+            })
+
+            // Clean URL
+            router.replace('/dashboard', { scroll: false })
+        }
+
+        // Handle GitHub connection error
+        if (errorParam === 'github_connection_failed') {
+            setNotification({
+                show: true,
+                type: 'error',
+                message: `GitHub connection failed: ${detail || 'Unknown error. Please try again.'}`
+            })
+            router.replace('/dashboard', { scroll: false })
+        }
+
+        // Auto-hide notification after 5 seconds
+        if (notification.show) {
+            const timer = setTimeout(() => {
+                setNotification({ show: false, type: '', message: '' })
+            }, 5000)
+            return () => clearTimeout(timer)
+        }
+    }, [searchParams, user, router, checkGithubConnection, notification.show])
+
+    // Fetch dashboard data
     useEffect(() => {
         const fetchDashboardData = async () => {
+            // Only fetch if user has completed onboarding
+            if (!user?.onboardingCompleted) return
+
             try {
                 const [analysisRes, rolesRes, snapshotRes] = await Promise.all([
                     mlAPI.getLatestAnalysis(),
@@ -36,7 +100,7 @@ function DashboardPage() {
         }
 
         fetchDashboardData()
-    }, [])
+    }, [user?.onboardingCompleted])
 
     if (loading) {
         return (
@@ -51,6 +115,36 @@ function DashboardPage() {
 
     return (
         <div className="dashboard-page">
+            {/* Notification Banner */}
+            {notification.show && (
+                <div className={`dashboard-notification notification-${notification.type}`}>
+                    <div className="notification-content">
+                        {notification.type === 'success' && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                        )}
+                        {notification.type === 'error' && (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <circle cx="12" cy="12" r="10" />
+                                <line x1="15" y1="9" x2="9" y2="15" />
+                                <line x1="9" y1="9" x2="15" y2="15" />
+                            </svg>
+                        )}
+                        <span>{notification.message}</span>
+                    </div>
+                    <button
+                        className="notification-close"
+                        onClick={() => setNotification({ show: false, type: '', message: '' })}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+
             {/* Header */}
             <div className="dashboard-header">
                 <div>
@@ -288,4 +382,22 @@ function DashboardPage() {
     )
 }
 
-export default DashboardPage
+// Loading fallback for Suspense
+function DashboardLoading() {
+    return (
+        <div className="dashboard-loading">
+            <div className="spinner"></div>
+            <p>Loading dashboard...</p>
+        </div>
+    )
+}
+
+// Wrapper component with Suspense boundary for useSearchParams
+export default function DashboardPage() {
+    return (
+        <Suspense fallback={<DashboardLoading />}>
+            <DashboardPageContent />
+        </Suspense>
+    )
+}
+

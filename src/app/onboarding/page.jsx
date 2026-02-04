@@ -223,7 +223,8 @@ function OnboardingPage() {
         try {
             let resumeUrl = formData.resumeUrl
             if (formData.resumeFile && !resumeUrl) {
-                const response = await storageAPI.uploadResume(formData.resumeFile)
+                // Upload resume with user ID for proper organization and profile update
+                const response = await storageAPI.uploadResume(formData.resumeFile, user?.id)
                 resumeUrl = response.data.url
 
                 // Trigger resume skill extraction if user ID is available
