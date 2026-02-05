@@ -123,6 +123,14 @@
     color: var(--text-tertiary);
 }
 
+.report-size {
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    background: var(--bg-glass);
+    border-radius: var(--radius-sm);
+}
+
 .report-status {
     text-transform: capitalize;
     font-weight: 500;

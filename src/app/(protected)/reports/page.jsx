@@ -2,19 +2,25 @@
 
 import { useState, useEffect } from 'react'
 import { reportAPI } from '../../../services/api'
+import { useAuth } from '../../../context/AuthContext'
 import './reports.css'
 
 function ReportsPage() {
+    const { user } = useAuth()
     const [loading, setLoading] = useState(true)
     const [reports, setReports] = useState([])
     const [downloading, setDownloading] = useState(null)
-    const [generating, setGenerating] = useState(false)
 
     useEffect(() => {
         const fetchReports = async () => {
+            if (!user?.id) {
+                setLoading(false)
+                return
+            }
+
             try {
-                const response = await reportAPI.getReports()
-                setReports(response.data)
+                const response = await reportAPI.getReports(user.id)
+                setReports(response.data || [])
             } catch (error) {
                 console.error('Failed to fetch reports:', error)
             }
@@ -22,43 +28,30 @@ function ReportsPage() {
         }
 
         fetchReports()
-    }, [])
+    }, [user?.id])
 
-    const handleDownload = async (reportId, filename) => {
-        setDownloading(reportId)
+    const handleDownload = async (report) => {
+        setDownloading(report.id)
         try {
-            const response = await reportAPI.downloadReport(reportId)
-            // Create a blob URL and trigger download
-            const url = window.URL.createObjectURL(new Blob([response.data]))
-            const link = document.createElement('a')
-            link.href = url
-            link.setAttribute('download', filename)
-            document.body.appendChild(link)
-            link.click()
-            link.remove()
+            await reportAPI.downloadReport(report.filePath, report.filename)
         } catch (error) {
             console.error('Download failed:', error)
         }
         setDownloading(null)
     }
 
-    const handleGenerateReport = async () => {
-        setGenerating(true)
-        try {
-            await reportAPI.requestReport()
-            // Optimistically add a pending report
-            const newReport = {
-                id: `temp-${Date.now()}`,
-                filename: `skill_gap_report_${new Date().toISOString().split('T')[0]}.pdf`,
-                generatedAt: new Date().toISOString(),
-                status: 'pending',
-                emailSent: false
-            }
-            setReports([newReport, ...reports])
-        } catch (error) {
-            console.error('Report generation failed:', error)
+    const handleView = (report) => {
+        if (report.signedUrl) {
+            reportAPI.viewReport(report.signedUrl)
         }
-        setGenerating(false)
+    }
+
+    // Format file size
+    const formatFileSize = (bytes) => {
+        if (!bytes || bytes === 0) return ''
+        const kb = bytes / 1024
+        if (kb < 1024) return `${kb.toFixed(1)} KB`
+        return `${(kb / 1024).toFixed(1)} MB`
     }
 
     if (loading) {
@@ -76,30 +69,8 @@ function ReportsPage() {
             <div className="page-header">
                 <div className="header-content">
                     <h1>My Reports</h1>
-                    <p>Access your historical analysis reports and insights</p>
+                    <p>View and download your skill gap analysis reports</p>
                 </div>
-                <button
-                    className="btn btn-primary"
-                    onClick={handleGenerateReport}
-                    disabled={generating}
-                >
-                    {generating ? (
-                        <>
-                            <div className="spinner" style={{ width: 20, height: 20 }}></div>
-                            Generating...
-                        </>
-                    ) : (
-                        <>
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <path d="M14 2v6h6" />
-                                <path d="M12 18v-6" />
-                                <path d="M9 15h6" />
-                            </svg>
-                            Generate New Report
-                        </>
-                    )}
-                </button>
             </div>
 
             {/* Reports List */}
@@ -110,11 +81,11 @@ function ReportsPage() {
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                             <path d="M14 2v6h6" />
                         </svg>
-                        <h3>No reports generated yet</h3>
-                        <p>Generate your first skill gap analysis report to track your progress.</p>
-                        <button className="btn btn-outline" onClick={handleGenerateReport}>
-                            Generate Report
-                        </button>
+                        <h3>No reports available yet</h3>
+                        <p>
+                            Your skill gap analysis reports will appear here once generated.
+                            Go to the Trends page and click "Start Skill Gap Analysis" to generate your first report.
+                        </p>
                     </div>
                 ) : (
                     <div className="reports-grid animate-fadeIn">
@@ -131,40 +102,46 @@ function ReportsPage() {
                                 </div>
 
                                 <div className="report-info">
-                                    <h3>{report.filename}</h3>
+                                    <h3 title={report.filename}>{report.filename}</h3>
                                     <div className="report-metadata">
                                         <span className="report-date">
-                                            {new Date(report.generatedAt).toLocaleDateString('en-US', {
+                                            {report.generatedAt ? new Date(report.generatedAt).toLocaleDateString('en-US', {
                                                 year: 'numeric',
                                                 month: 'short',
                                                 day: 'numeric'
-                                            })}
+                                            }) : 'Unknown date'}
                                         </span>
-                                        <span className={`report-status status-${report.status}`}>
+                                        {report.fileSize > 0 && (
+                                            <span className="report-size">
+                                                {formatFileSize(report.fileSize)}
+                                            </span>
+                                        )}
+                                        <span className="report-status status-completed">
                                             {report.status}
                                         </span>
                                     </div>
                                 </div>
 
                                 <div className="report-actions">
-                                    <div className="email-status" title={report.emailSent ? `Sent to email at ${new Date(report.emailSentAt).toLocaleTimeString()}` : 'Email pending'}>
-                                        {report.emailSent ? (
-                                            <svg className="sent" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M22 2L11 13" />
-                                                <path d="M22 2l-7 20-4-9-9-4 20-7z" />
-                                            </svg>
-                                        ) : (
-                                            <svg className="pending" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <circle cx="12" cy="12" r="10" />
-                                                <path d="M12 6v6l4 2" />
-                                            </svg>
-                                        )}
-                                    </div>
-
+                                    {/* View Button */}
                                     <button
                                         className="btn btn-icon btn-ghost"
-                                        onClick={() => handleDownload(report.id, report.filename)}
-                                        disabled={report.status !== 'completed' || downloading === report.id}
+                                        onClick={() => handleView(report)}
+                                        disabled={!report.signedUrl}
+                                        title="View report"
+                                    >
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                            <circle cx="12" cy="12" r="3" />
+                                        </svg>
+                                    </button>
+
+                                    {/* Download Button */}
+                                    <button
+                                        className="btn btn-icon btn-ghost"
+                                        onClick={() => handleDownload(report)}
+                                        disabled={downloading === report.id}
+                                        title="Download report"
                                     >
                                         {downloading === report.id ? (
                                             <div className="spinner" style={{ width: 20, height: 20 }}></div>
@@ -193,11 +170,11 @@ function ReportsPage() {
                     </svg>
                 </div>
                 <div className="info-content">
-                    <h3>Automated Reporting</h3>
+                    <h3>About Your Reports</h3>
                     <p>
-                        Reports are automatically generated weekly based on your Notification preferences.
-                        You can also manually generate a report at any time to see your latest analysis against
-                        real-time market data.
+                        Reports are generated when you run a skill gap analysis from the Trends page.
+                        Each report compares your skills against current job market requirements
+                        and provides personalized recommendations for improvement.
                     </p>
                 </div>
             </div>

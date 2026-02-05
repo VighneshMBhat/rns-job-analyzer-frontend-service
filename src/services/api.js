@@ -424,36 +424,213 @@ export const mlAPI = {
     }
 }
 
-// Report Service
-export const reportAPI = {
-    getReports: async () => {
+// Skill Gap Analysis Service
+const SKILLGAP_SERVICE_URL = process.env.NEXT_PUBLIC_SKILLGAP_SERVICE_URL || 'https://skillgap-service.example.com'
+
+const skillGapAxios = axios.create({
+    baseURL: SKILLGAP_SERVICE_URL,
+    headers: {
+        'Content-Type': 'application/json'
+    }
+})
+
+export const skillGapAPI = {
+    /**
+     * Trigger skill gap analysis for a user
+     * This manually invokes the analysis that normally runs as a cron job
+     * @param {string} userId - The user's ID
+     * @returns {Object} - { success: boolean, message?: string, error?: string }
+     */
+    triggerAnalysis: async (userId) => {
+        if (!userId) {
+            return { success: false, error: 'User ID is required' }
+        }
+
         try {
-            return await api.get('/reports')
-        } catch (e) {
-            await new Promise(resolve => setTimeout(resolve, 800))
+            const response = await skillGapAxios.post(`/api/analysis/trigger/${userId}`)
             return {
-                data: [
-                    {
-                        id: 'rep-101',
-                        filename: 'skill_gap_report_2023-10-01.pdf',
-                        generatedAt: '2023-10-01T10:00:00Z',
-                        status: 'completed',
-                        emailSent: true,
-                        emailSentAt: '2023-10-01T10:05:00Z'
+                success: true,
+                message: response.data.message || 'Skill gap analysis started',
+                data: response.data
+            }
+        } catch (error) {
+            console.error('Skill gap analysis trigger failed:', error)
+
+            // Handle specific error responses
+            if (error.response) {
+                const status = error.response.status
+                if (status === 429) {
+                    return {
+                        success: false,
+                        error: 'Analysis already in progress. Please wait for it to complete.'
                     }
-                ]
+                }
+                return {
+                    success: false,
+                    error: error.response.data?.message || 'Failed to start analysis'
+                }
+            }
+
+            return {
+                success: false,
+                error: 'Unable to connect to analysis service. Please try again later.'
             }
         }
     },
 
-    requestReport: async () => {
-        return api.post('/reports/generate').catch(() => {
-            return { data: { success: true, message: 'Report generation queued' } }
-        })
+    /**
+     * Check the status of a running analysis
+     * @param {string} userId - The user's ID
+     */
+    getAnalysisStatus: async (userId) => {
+        if (!supabase || !userId) {
+            return { status: 'unknown', error: 'Invalid parameters' }
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('skill_gap_analyses')
+                .select('id, status, analyzed_at, gap_percentage, role_fit_score')
+                .eq('user_id', userId)
+                .order('analyzed_at', { ascending: false })
+                .limit(1)
+                .single()
+
+            if (error) {
+                if (error.code === 'PGRST116') {
+                    return { status: 'none', message: 'No analysis found' }
+                }
+                throw error
+            }
+
+            return {
+                status: data.status,
+                analyzedAt: data.analyzed_at,
+                gapPercentage: data.gap_percentage,
+                roleFitScore: data.role_fit_score
+            }
+        } catch (error) {
+            console.error('Failed to get analysis status:', error)
+            return { status: 'error', error: error.message }
+        }
+    }
+}
+
+// Report Service - Fetches PDF reports from Supabase 'reports' bucket
+export const reportAPI = {
+    /**
+     * Get reports for the current user from Supabase
+     * Reports are stored in the 'reports' bucket organized by user_id
+     * @param {string} userId - The user's ID
+     */
+    getReports: async (userId) => {
+        if (!supabase || !userId) {
+            console.warn('Supabase not configured or no userId')
+            return { data: [] }
+        }
+
+        try {
+            // List files in the user's reports folder
+            const { data: files, error } = await supabase.storage
+                .from('reports')
+                .list(userId, {
+                    limit: 50,
+                    sortBy: { column: 'created_at', order: 'desc' }
+                })
+
+            if (error) {
+                console.error('Error listing reports:', error)
+                return { data: [] }
+            }
+
+            if (!files || files.length === 0) {
+                return { data: [] }
+            }
+
+            // Map files to report objects with signed URLs
+            const reports = await Promise.all(
+                files
+                    .filter(file => file.name.endsWith('.pdf'))
+                    .map(async (file) => {
+                        const filePath = `${userId}/${file.name}`
+
+                        // Generate signed URL for viewing/downloading
+                        let signedUrl = null
+                        try {
+                            const { data: signedData, error: signedError } = await supabase.storage
+                                .from('reports')
+                                .createSignedUrl(filePath, 3600) // 1 hour expiry
+
+                            if (!signedError && signedData) {
+                                signedUrl = signedData.signedUrl
+                            }
+                        } catch (e) {
+                            console.warn('Could not create signed URL for report:', e)
+                        }
+
+                        return {
+                            id: file.id || file.name,
+                            filename: file.name,
+                            filePath: filePath,
+                            signedUrl: signedUrl,
+                            generatedAt: file.created_at || file.updated_at,
+                            fileSize: file.metadata?.size || 0,
+                            status: 'completed' // If it's in storage, it's complete
+                        }
+                    })
+            )
+
+            return { data: reports }
+        } catch (error) {
+            console.error('Failed to fetch reports:', error)
+            return { data: [] }
+        }
     },
 
-    downloadReport: async (reportId) => {
-        return { data: new Blob(['PDF Content Mock'], { type: 'application/pdf' }) }
+    /**
+     * Download a report by getting a fresh signed URL
+     * @param {string} filePath - The full path to the file in storage
+     * @param {string} filename - The filename for download
+     */
+    downloadReport: async (filePath, filename) => {
+        if (!supabase) {
+            return { success: false, error: 'Supabase not configured' }
+        }
+
+        try {
+            // Get fresh signed URL for download
+            const { data, error } = await supabase.storage
+                .from('reports')
+                .createSignedUrl(filePath, 3600)
+
+            if (error) throw error
+
+            // Trigger download
+            if (typeof window !== 'undefined' && data.signedUrl) {
+                const link = document.createElement('a')
+                link.href = data.signedUrl
+                link.setAttribute('download', filename)
+                link.setAttribute('target', '_blank')
+                document.body.appendChild(link)
+                link.click()
+                link.remove()
+            }
+
+            return { success: true, url: data.signedUrl }
+        } catch (error) {
+            console.error('Download failed:', error)
+            return { success: false, error: error.message }
+        }
+    },
+
+    /**
+     * View a report in a new tab
+     * @param {string} signedUrl - The signed URL of the report
+     */
+    viewReport: (signedUrl) => {
+        if (typeof window !== 'undefined' && signedUrl) {
+            window.open(signedUrl, '_blank')
+        }
     }
 }
 

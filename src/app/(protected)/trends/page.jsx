@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { jobMarketAPI } from '../../../services/api'
+import { jobMarketAPI, skillGapAPI } from '../../../services/api'
+import { useAuth } from '../../../context/AuthContext'
 import './trends.css'
 
 function TrendsPage() {
+    const { user } = useAuth()
     const [loading, setLoading] = useState(true)
     const [activeTab, setActiveTab] = useState('roles')
     const [data, setData] = useState({
@@ -12,6 +14,11 @@ function TrendsPage() {
         skills: [],
         snapshot: null
     })
+
+    // Skill Gap Analysis State
+    const [analysisLoading, setAnalysisLoading] = useState(false)
+    const [analysisMessage, setAnalysisMessage] = useState('')
+    const [analysisError, setAnalysisError] = useState('')
 
     useEffect(() => {
         const fetchTrendsData = async () => {
@@ -36,6 +43,32 @@ function TrendsPage() {
         fetchTrendsData()
     }, [])
 
+    // Handle Skill Gap Analysis trigger
+    const handleStartAnalysis = async () => {
+        if (!user?.id) {
+            setAnalysisError('Please log in to start skill gap analysis')
+            return
+        }
+
+        setAnalysisLoading(true)
+        setAnalysisMessage('')
+        setAnalysisError('')
+
+        try {
+            const result = await skillGapAPI.triggerAnalysis(user.id)
+
+            if (result.success) {
+                setAnalysisMessage(result.message || 'Skill gap analysis started! Check the Skill Gap page for results.')
+            } else {
+                setAnalysisError(result.error || 'Failed to start analysis')
+            }
+        } catch (error) {
+            setAnalysisError('An error occurred. Please try again.')
+        }
+
+        setAnalysisLoading(false)
+    }
+
     if (loading) {
         return (
             <div className="trends-loading">
@@ -51,9 +84,74 @@ function TrendsPage() {
         <div className="trends-page">
             {/* Header */}
             <div className="page-header">
-                <h1>Job Market Trends</h1>
-                <p>Real-time insights into the most in-demand roles and skills</p>
+                <div className="header-content">
+                    <h1>Job Market Trends</h1>
+                    <p>Real-time insights into the most in-demand roles and skills</p>
+                </div>
+
+                {/* Skill Gap Analysis Button */}
+                <button
+                    className="btn btn-primary btn-analyze"
+                    onClick={handleStartAnalysis}
+                    disabled={analysisLoading}
+                >
+                    {analysisLoading ? (
+                        <>
+                            <div className="spinner" style={{ width: 20, height: 20 }}></div>
+                            Analyzing...
+                        </>
+                    ) : (
+                        <>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                            </svg>
+                            Start Skill Gap Analysis
+                        </>
+                    )}
+                </button>
             </div>
+
+            {/* Analysis Status Messages */}
+            {analysisMessage && (
+                <div className="analysis-alert success animate-fadeIn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                    <span>{analysisMessage}</span>
+                    <button
+                        className="alert-dismiss"
+                        onClick={() => setAnalysisMessage('')}
+                        aria-label="Dismiss"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            )}
+
+            {analysisError && (
+                <div className="analysis-alert error animate-fadeIn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>{analysisError}</span>
+                    <button
+                        className="alert-dismiss"
+                        onClick={() => setAnalysisError('')}
+                        aria-label="Dismiss"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+            )}
 
             {/* Market Overview */}
             <div className="market-overview">
