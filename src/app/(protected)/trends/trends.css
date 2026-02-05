@@ -477,6 +477,138 @@
     font-size: 0.875rem;
 }
 
+/* Job Cards Grid */
+.jobs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--space-5);
+}
+
+.job-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    transition: all var(--transition-normal);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.job-card:hover {
+    border-color: var(--primary-500);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3);
+}
+
+.job-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.job-posted {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    background: var(--surface-elevated);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+}
+
+.job-company,
+.job-location {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+}
+
+.job-company svg,
+.job-location svg {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+.job-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.job-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.job-tag {
+    font-size: 0.75rem;
+    background: linear-gradient(135deg, var(--primary-500) 0%, var(--accent-500) 100%);
+    color: white;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-full);
+    font-weight: 500;
+}
+
+.job-actions {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: auto;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-color);
+}
+
+.job-actions .btn {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+}
+
+/* Empty State */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-12);
+    text-align: center;
+    color: var(--text-tertiary);
+    grid-column: 1 / -1;
+}
+
+.empty-state svg {
+    color: var(--text-tertiary);
+    margin-bottom: var(--space-4);
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+}
+
+.empty-state p {
+    font-size: 0.9375rem;
+    max-width: 400px;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .market-overview {

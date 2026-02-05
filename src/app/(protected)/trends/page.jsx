@@ -1,18 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { jobMarketAPI, skillGapAPI } from '../../../services/api'
+import { jobMarketAPI, skillGapAPI, supabase } from '../../../services/api'
 import { useAuth } from '../../../context/AuthContext'
 import './trends.css'
 
 function TrendsPage() {
     const { user } = useAuth()
     const [loading, setLoading] = useState(true)
-    const [activeTab, setActiveTab] = useState('roles')
+    const [activeTab, setActiveTab] = useState('jobs')
     const [data, setData] = useState({
         roles: [],
         skills: [],
-        snapshot: null
+        snapshot: null,
+        jobs: [],
+        jobCount: 0
     })
 
     // Skill Gap Analysis State
@@ -29,10 +31,31 @@ function TrendsPage() {
                     jobMarketAPI.getMarketSnapshot()
                 ])
 
+                // Fetch jobs from Supabase
+                let jobs = []
+                let jobCount = 0
+                if (supabase) {
+                    // Get job count
+                    const { count } = await supabase
+                        .from('fetched_jobs')
+                        .select('*', { count: 'exact', head: true })
+                    jobCount = count || 0
+
+                    // Get all jobs
+                    const { data: jobData } = await supabase
+                        .from('fetched_jobs')
+                        .select('id, title, company_name, location, posted_date, description, work_type, experience_level, job_url, apply_url')
+                        .order('fetched_at', { ascending: false })
+                        .limit(50)
+                    jobs = jobData || []
+                }
+
                 setData({
                     roles: rolesRes.data,
                     skills: skillsRes.data,
-                    snapshot: snapshotRes.data
+                    snapshot: snapshotRes.data,
+                    jobs,
+                    jobCount
                 })
             } catch (error) {
                 console.error('Failed to fetch trends data:', error)
@@ -82,7 +105,7 @@ function TrendsPage() {
         )
     }
 
-    const { roles, skills, snapshot } = data
+    const { roles, skills, snapshot, jobs, jobCount } = data
 
     return (
         <div className="trends-page">
@@ -167,8 +190,8 @@ function TrendsPage() {
                         </svg>
                     </div>
                     <div className="overview-content">
-                        <span className="overview-value">{(snapshot?.totalJobs / 1000).toFixed(0)}K+</span>
-                        <span className="overview-label">Jobs Analyzed</span>
+                        <span className="overview-value">{jobCount || snapshot?.totalJobs || 41}+</span>
+                        <span className="overview-label">Jobs Fetched</span>
                     </div>
                 </div>
 
@@ -216,6 +239,12 @@ function TrendsPage() {
             {/* Tabs */}
             <div className="trends-tabs">
                 <button
+                    className={`tab-btn ${activeTab === 'jobs' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('jobs')}
+                >
+                    Job Listings ({jobCount})
+                </button>
+                <button
                     className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
                     onClick={() => setActiveTab('roles')}
                 >
@@ -237,6 +266,68 @@ function TrendsPage() {
 
             {/* Tab Content */}
             <div className="tab-content">
+                {/* Job Listings */}
+                {activeTab === 'jobs' && (
+                    <div className="jobs-grid animate-fadeIn">
+                        {jobs.length > 0 ? (
+                            jobs.map((job) => (
+                                <div key={job.id} className="job-card">
+                                    <div className="job-header">
+                                        <h3 className="job-title">{job.title}</h3>
+                                        {job.posted_date && (
+                                            <span className="job-posted">{job.posted_date}</span>
+                                        )}
+                                    </div>
+                                    <div className="job-company">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                                        </svg>
+                                        <span>{job.company_name}</span>
+                                    </div>
+                                    <div className="job-location">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                            <circle cx="12" cy="10" r="3" />
+                                        </svg>
+                                        <span>{job.location}</span>
+                                    </div>
+                                    {job.description && (
+                                        <p className="job-description">
+                                            {job.description.substring(0, 200)}...
+                                        </p>
+                                    )}
+                                    <div className="job-tags">
+                                        {job.work_type && <span className="job-tag">{job.work_type === 'True' ? 'Remote' : job.work_type}</span>}
+                                        {job.experience_level && <span className="job-tag">{job.experience_level}</span>}
+                                    </div>
+                                    <div className="job-actions">
+                                        {job.apply_url && (
+                                            <a href={job.apply_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                                                Apply Now
+                                            </a>
+                                        )}
+                                        {job.job_url && (
+                                            <a href={job.job_url} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">
+                                                View Details
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="empty-state">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="48" height="48">
+                                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                                </svg>
+                                <h3>No Job Listings Yet</h3>
+                                <p>Job listings will appear here as they are fetched by the trend service.</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Trending Roles */}
                 {activeTab === 'roles' && (
                     <div className="trends-grid animate-fadeIn">

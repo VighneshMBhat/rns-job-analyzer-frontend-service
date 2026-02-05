@@ -4,8 +4,9 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '../../../context/AuthContext'
-import { mlAPI, jobMarketAPI, githubAPI } from '../../../services/api'
+import { mlAPI, jobMarketAPI, githubAPI, supabase } from '../../../services/api'
 import './dashboard.css'
+
 
 function DashboardPageContent() {
     const router = useRouter()
@@ -16,7 +17,11 @@ function DashboardPageContent() {
     const [data, setData] = useState({
         latestAnalysis: null,
         trendingRoles: [],
-        marketSnapshot: null
+        marketSnapshot: null,
+        recentJobs: [],
+        jobCount: 0,
+        userSkills: [],
+        reportsCount: 0
     })
 
     // Handle GitHub OAuth callback and onboarding redirect
@@ -82,16 +87,60 @@ function DashboardPageContent() {
             if (!user?.onboardingCompleted) return
 
             try {
+                // Fetch from existing APIs
                 const [analysisRes, rolesRes, snapshotRes] = await Promise.all([
                     mlAPI.getLatestAnalysis(),
                     jobMarketAPI.getTrendingRoles(),
                     jobMarketAPI.getMarketSnapshot()
                 ])
 
+                // Fetch dynamic data from Supabase
+                let recentJobs = []
+                let jobCount = 0
+                let userSkills = []
+                let reportsCount = 0
+
+                if (supabase) {
+                    // Get job count
+                    const { count: totalJobs } = await supabase
+                        .from('fetched_jobs')
+                        .select('*', { count: 'exact', head: true })
+                    jobCount = totalJobs || 0
+
+                    // Get recent jobs
+                    const { data: jobs } = await supabase
+                        .from('fetched_jobs')
+                        .select('id, title, company_name, location, posted_date')
+                        .order('fetched_at', { ascending: false })
+                        .limit(5)
+                    recentJobs = jobs || []
+
+                    // Get user skills (if any)
+                    if (user?.id) {
+                        const { data: skills } = await supabase
+                            .from('user_skills')
+                            .select('skill_name, skill_source, proficiency_level')
+                            .eq('user_id', user.id)
+                            .limit(10)
+                        userSkills = skills || []
+
+                        // Get reports count
+                        const { count: reports } = await supabase
+                            .from('reports')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('user_id', user.id)
+                        reportsCount = reports || 0
+                    }
+                }
+
                 setData({
                     latestAnalysis: analysisRes.data,
                     trendingRoles: rolesRes.data.slice(0, 5),
-                    marketSnapshot: snapshotRes.data
+                    marketSnapshot: snapshotRes.data,
+                    recentJobs,
+                    jobCount,
+                    userSkills,
+                    reportsCount
                 })
             } catch (error) {
                 console.error('Failed to fetch dashboard data:', error)
@@ -100,7 +149,8 @@ function DashboardPageContent() {
         }
 
         fetchDashboardData()
-    }, [user?.onboardingCompleted])
+    }, [user?.onboardingCompleted, user?.id])
+
 
     if (loading) {
         return (
@@ -111,7 +161,7 @@ function DashboardPageContent() {
         )
     }
 
-    const { latestAnalysis, trendingRoles, marketSnapshot } = data
+    const { latestAnalysis, trendingRoles, marketSnapshot, recentJobs, jobCount, userSkills, reportsCount } = data
 
     return (
         <div className="dashboard-page">
@@ -221,8 +271,8 @@ function DashboardPageContent() {
                     </div>
                     <div className="stat-content">
                         <span className="stat-label">Jobs Analyzed</span>
-                        <span className="stat-value">{(marketSnapshot?.totalJobs / 1000).toFixed(0) || 45}K+</span>
-                        <span className="stat-change">Updated weekly</span>
+                        <span className="stat-value">{jobCount || 41}+</span>
+                        <span className="stat-change">Updated daily</span>
                     </div>
                 </div>
             </div>
@@ -263,25 +313,44 @@ function DashboardPageContent() {
                     </div>
                 </div>
 
-                {/* Trending Roles */}
+                {/* Recent Jobs */}
                 <div className="dashboard-card">
                     <div className="card-header">
-                        <h2>Trending Job Roles</h2>
+                        <h2>Recent Job Listings</h2>
                         <Link href="/trends" className="card-link">View all →</Link>
                     </div>
                     <div className="roles-list">
-                        {trendingRoles.map((role, index) => (
-                            <div key={role.id} className="role-item">
-                                <span className="role-rank">#{index + 1}</span>
-                                <div className="role-info">
-                                    <span className="role-title">{role.title}</span>
-                                    <span className="role-demand">Demand: {role.demand}%</span>
+                        {recentJobs.length > 0 ? (
+                            recentJobs.map((job, index) => (
+                                <div key={job.id} className="role-item">
+                                    <span className="role-rank">#{index + 1}</span>
+                                    <div className="role-info">
+                                        <span className="role-title">{job.title}</span>
+                                        <span className="role-demand">{job.company_name} • {job.location}</span>
+                                    </div>
+                                    <span className="role-growth positive">
+                                        {job.posted_date || 'New'}
+                                    </span>
                                 </div>
-                                <span className={`role-growth ${role.growth.startsWith('+') ? 'positive' : 'negative'}`}>
-                                    {role.growth}
-                                </span>
+                            ))
+                        ) : trendingRoles.length > 0 ? (
+                            trendingRoles.map((role, index) => (
+                                <div key={role.id} className="role-item">
+                                    <span className="role-rank">#{index + 1}</span>
+                                    <div className="role-info">
+                                        <span className="role-title">{role.title}</span>
+                                        <span className="role-demand">Demand: {role.demand}%</span>
+                                    </div>
+                                    <span className={`role-growth ${role.growth?.startsWith('+') ? 'positive' : 'negative'}`}>
+                                        {role.growth}
+                                    </span>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="empty-state">
+                                <p>No job listings yet. Check back soon!</p>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
 

@@ -34,7 +34,7 @@ function HeroPage() {
                         <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                         <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
-                    <span>SkillGap AI</span>
+                    <span>Talento Vision</span>
                 </div>
                 <div className="hero-nav-actions">
                     <Link href="/login" className="btn btn-ghost">
@@ -134,7 +134,7 @@ function HeroPage() {
 
             {/* Footer */}
             <footer className="hero-footer">
-                <p>© 2024 SkillGap AI. Built with ❤️ for developers.</p>
+                <p>© 2024 Talento Vision. Built with ❤️ for developers.</p>
             </footer>
         </div>
     )

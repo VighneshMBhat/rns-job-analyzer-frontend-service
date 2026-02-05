@@ -88,7 +88,7 @@ export default function Sidebar() {
                         <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                 </div>
-                <span className="sidebar-brand">SkillGap AI</span>
+                <span className="sidebar-brand">Talento Vision</span>
             </div>
 
             <nav className="sidebar-nav">
