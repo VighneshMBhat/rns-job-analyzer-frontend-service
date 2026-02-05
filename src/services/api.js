@@ -424,8 +424,8 @@ export const mlAPI = {
     }
 }
 
-// Skill Gap Analysis Service
-const SKILLGAP_SERVICE_URL = process.env.NEXT_PUBLIC_SKILLGAP_SERVICE_URL || 'https://skillgap-service.example.com'
+// Skill Gap Analysis Service (AWS Lambda - Per INTEGRATION.md)
+const SKILLGAP_SERVICE_URL = process.env.NEXT_PUBLIC_SKILLGAP_SERVICE_URL || 'https://tku29qrthd.execute-api.us-east-1.amazonaws.com/Prod'
 
 const skillGapAxios = axios.create({
     baseURL: SKILLGAP_SERVICE_URL,
@@ -434,93 +434,208 @@ const skillGapAxios = axios.create({
     }
 })
 
+// Add auth interceptor for skill gap service
+skillGapAxios.interceptors.request.use((config) => {
+    if (typeof window !== 'undefined') {
+        const token = localStorage.getItem('access_token')
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+        }
+    }
+    return config
+})
+
 export const skillGapAPI = {
     /**
-     * Trigger skill gap analysis for a user
-     * This manually invokes the analysis that normally runs as a cron job
-     * @param {string} userId - The user's ID
-     * @returns {Object} - { success: boolean, message?: string, error?: string }
+     * Get user's preferred roles
+     * GET /api/analysis/roles
      */
-    triggerAnalysis: async (userId) => {
-        if (!userId) {
-            return { success: false, error: 'User ID is required' }
+    getPreferredRoles: async () => {
+        try {
+            const response = await skillGapAxios.get('/api/analysis/roles')
+            return {
+                success: true,
+                roles: response.data.roles || []
+            }
+        } catch (error) {
+            console.error('Failed to get preferred roles:', error)
+            return { success: false, roles: [], error: error.message }
+        }
+    },
+
+    /**
+     * Set user's preferred roles (1-3 target job roles)
+     * POST /api/analysis/roles
+     * @param {string[]} roles - Array of role names (max 3)
+     */
+    setPreferredRoles: async (roles) => {
+        if (!roles || roles.length === 0) {
+            return { success: false, error: 'At least one role is required' }
         }
 
         try {
-            const response = await skillGapAxios.post(`/api/analysis/trigger/${userId}`)
+            const validRoles = roles.slice(0, 3) // Max 3 roles
+            const response = await skillGapAxios.post('/api/analysis/roles', {
+                roles: validRoles
+            })
             return {
                 success: true,
-                message: response.data.message || 'Skill gap analysis started',
-                data: response.data
+                roles: response.data.roles,
+                message: 'Preferred roles saved successfully'
             }
         } catch (error) {
-            console.error('Skill gap analysis trigger failed:', error)
-
-            // Handle specific error responses
-            if (error.response) {
-                const status = error.response.status
-                if (status === 429) {
-                    return {
-                        success: false,
-                        error: 'Analysis already in progress. Please wait for it to complete.'
-                    }
-                }
-                return {
-                    success: false,
-                    error: error.response.data?.message || 'Failed to start analysis'
-                }
-            }
-
+            console.error('Failed to set preferred roles:', error)
             return {
                 success: false,
-                error: 'Unable to connect to analysis service. Please try again later.'
+                error: error.response?.data?.detail || 'Failed to save roles'
             }
         }
     },
 
     /**
-     * Check the status of a running analysis
-     * @param {string} userId - The user's ID
+     * Generate skill gap analysis (Main action - takes 1-2 minutes)
+     * POST /api/analysis/generate
+     * @param {string[]} preferredRoles - Optional: override saved roles
+     * @returns Analysis result with report URL
      */
-    getAnalysisStatus: async (userId) => {
-        if (!supabase || !userId) {
-            return { status: 'unknown', error: 'Invalid parameters' }
-        }
-
+    generateAnalysis: async (preferredRoles = null) => {
         try {
-            const { data, error } = await supabase
-                .from('skill_gap_analyses')
-                .select('id, status, analyzed_at, gap_percentage, role_fit_score')
-                .eq('user_id', userId)
-                .order('analyzed_at', { ascending: false })
-                .limit(1)
-                .single()
+            const body = {}
+            if (preferredRoles && preferredRoles.length > 0) {
+                body.preferred_roles = preferredRoles
+            }
 
-            if (error) {
-                if (error.code === 'PGRST116') {
-                    return { status: 'none', message: 'No analysis found' }
-                }
-                throw error
+            const response = await skillGapAxios.post('/api/analysis/generate', body)
+
+            return {
+                success: true,
+                analysisId: response.data.analysis_id,
+                reportId: response.data.report_id,
+                reportUrl: response.data.report_url,
+                summary: response.data.summary,
+                analysis: response.data.analysis,
+                message: 'Analysis complete!'
+            }
+        } catch (error) {
+            console.error('Skill gap analysis failed:', error)
+
+            const message = error.response?.data?.detail || error.message || 'Analysis failed'
+
+            // Provide user-friendly error messages
+            let userError = message
+            if (message.includes('No preferred roles')) {
+                userError = 'Please select your target job roles first.'
+            } else if (message.includes('No skills found')) {
+                userError = 'No skills data found. Please connect GitHub or upload your resume first.'
+            } else if (message.includes('quota') || message.includes('limit')) {
+                userError = 'API limit reached. Please add your own Gemini API key in settings.'
+            } else if (message.includes('token') || message.includes('401')) {
+                userError = 'Session expired. Please log in again.'
             }
 
             return {
-                status: data.status,
-                analyzedAt: data.analyzed_at,
-                gapPercentage: data.gap_percentage,
-                roleFitScore: data.role_fit_score
+                success: false,
+                error: userError,
+                details: message
+            }
+        }
+    },
+
+    /**
+     * Get latest analysis result
+     * GET /api/analysis/latest
+     */
+    getLatestAnalysis: async () => {
+        try {
+            const response = await skillGapAxios.get('/api/analysis/latest')
+            return {
+                success: true,
+                data: response.data
             }
         } catch (error) {
-            console.error('Failed to get analysis status:', error)
-            return { status: 'error', error: error.message }
+            if (error.response?.status === 404) {
+                return { success: true, data: null }
+            }
+            console.error('Failed to get latest analysis:', error)
+            return { success: false, error: error.message }
+        }
+    },
+
+    /**
+     * Get analysis history
+     * GET /api/analysis/history?limit=10
+     */
+    getAnalysisHistory: async (limit = 10) => {
+        try {
+            const response = await skillGapAxios.get(`/api/analysis/history?limit=${limit}`)
+            return {
+                success: true,
+                analyses: response.data.analyses || []
+            }
+        } catch (error) {
+            console.error('Failed to get analysis history:', error)
+            return { success: false, analyses: [], error: error.message }
+        }
+    },
+
+    /**
+     * Get generated reports
+     * GET /api/analysis/reports?limit=10
+     */
+    getReports: async (limit = 10) => {
+        try {
+            const response = await skillGapAxios.get(`/api/analysis/reports?limit=${limit}`)
+            return {
+                success: true,
+                reports: response.data.reports || []
+            }
+        } catch (error) {
+            console.error('Failed to get reports:', error)
+            return { success: false, reports: [], error: error.message }
+        }
+    },
+
+    /**
+     * Check prerequisites for analysis
+     * Returns whether user has roles and skills set up
+     */
+    checkPrerequisites: async (userId) => {
+        if (!supabase || !userId) {
+            return { hasRoles: false, hasSkills: false, ready: false }
+        }
+
+        try {
+            // Check roles via API
+            const rolesResult = await skillGapAPI.getPreferredRoles()
+
+            // Check skills from Supabase
+            const { data: skills, error } = await supabase
+                .from('user_skills')
+                .select('id')
+                .eq('user_id', userId)
+
+            const hasRoles = rolesResult.roles && rolesResult.roles.length > 0
+            const hasSkills = !error && skills && skills.length > 0
+
+            return {
+                hasRoles,
+                hasSkills,
+                roles: rolesResult.roles || [],
+                skillsCount: skills?.length || 0,
+                ready: hasRoles && hasSkills
+            }
+        } catch (error) {
+            console.error('Failed to check prerequisites:', error)
+            return { hasRoles: false, hasSkills: false, ready: false, error: error.message }
         }
     }
 }
 
-// Report Service - Fetches PDF reports from Supabase 'reports' bucket
+// Report Service - Fetches PDF reports from Supabase 'reports' table
 export const reportAPI = {
     /**
-     * Get reports for the current user from Supabase
-     * Reports are stored in the 'reports' bucket organized by user_id
+     * Get reports for the current user from Supabase 'reports' table
+     * The skill gap service stores report metadata here with storage paths
      * @param {string} userId - The user's ID
      */
     getReports: async (userId) => {
@@ -530,36 +645,34 @@ export const reportAPI = {
         }
 
         try {
-            // List files in the user's reports folder
-            const { data: files, error } = await supabase.storage
+            // Query the reports table for this user's reports
+            const { data: reports, error } = await supabase
                 .from('reports')
-                .list(userId, {
-                    limit: 50,
-                    sortBy: { column: 'created_at', order: 'desc' }
-                })
+                .select('id, user_id, analysis_id, report_filename, report_url, report_size_bytes, report_type, email_sent, email_sent_at, email_recipient, status, generated_at')
+                .eq('user_id', userId)
+                .order('generated_at', { ascending: false })
+                .limit(50)
 
             if (error) {
-                console.error('Error listing reports:', error)
+                console.error('Error fetching reports from table:', error)
                 return { data: [] }
             }
 
-            if (!files || files.length === 0) {
+            if (!reports || reports.length === 0) {
                 return { data: [] }
             }
 
-            // Map files to report objects with signed URLs
-            const reports = await Promise.all(
-                files
-                    .filter(file => file.name.endsWith('.pdf'))
-                    .map(async (file) => {
-                        const filePath = `${userId}/${file.name}`
+            // Generate signed URLs for each report
+            const reportsWithUrls = await Promise.all(
+                reports.map(async (report) => {
+                    let signedUrl = null
 
-                        // Generate signed URL for viewing/downloading
-                        let signedUrl = null
+                    // The report_url field contains the storage path
+                    if (report.report_url) {
                         try {
                             const { data: signedData, error: signedError } = await supabase.storage
                                 .from('reports')
-                                .createSignedUrl(filePath, 3600) // 1 hour expiry
+                                .createSignedUrl(report.report_url, 3600) // 1 hour expiry
 
                             if (!signedError && signedData) {
                                 signedUrl = signedData.signedUrl
@@ -567,20 +680,25 @@ export const reportAPI = {
                         } catch (e) {
                             console.warn('Could not create signed URL for report:', e)
                         }
+                    }
 
-                        return {
-                            id: file.id || file.name,
-                            filename: file.name,
-                            filePath: filePath,
-                            signedUrl: signedUrl,
-                            generatedAt: file.created_at || file.updated_at,
-                            fileSize: file.metadata?.size || 0,
-                            status: 'completed' // If it's in storage, it's complete
-                        }
-                    })
+                    return {
+                        id: report.id,
+                        analysisId: report.analysis_id,
+                        filename: report.report_filename,
+                        filePath: report.report_url,
+                        signedUrl: signedUrl,
+                        generatedAt: report.generated_at,
+                        fileSize: report.report_size_bytes || 0,
+                        status: report.status,
+                        emailSent: report.email_sent,
+                        emailSentAt: report.email_sent_at,
+                        emailRecipient: report.email_recipient
+                    }
+                })
             )
 
-            return { data: reports }
+            return { data: reportsWithUrls }
         } catch (error) {
             console.error('Failed to fetch reports:', error)
             return { data: [] }

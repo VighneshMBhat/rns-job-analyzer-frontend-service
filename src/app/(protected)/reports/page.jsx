@@ -123,6 +123,21 @@ function ReportsPage() {
                                 </div>
 
                                 <div className="report-actions">
+                                    {/* Email Status Indicator */}
+                                    <div className="email-status" title={report.emailSent ? `Emailed to ${report.emailRecipient || 'user'}` : 'Email pending'}>
+                                        {report.emailSent ? (
+                                            <svg className="sent" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path d="M22 2L11 13" />
+                                                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+                                            </svg>
+                                        ) : (
+                                            <svg className="pending" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <polyline points="12 6 12 12 16 14" />
+                                            </svg>
+                                        )}
+                                    </div>
+
                                     {/* View Button */}
                                     <button
                                         className="btn btn-icon btn-ghost"
@@ -175,6 +190,10 @@ function ReportsPage() {
                         Reports are generated when you run a skill gap analysis from the Trends page.
                         Each report compares your skills against current job market requirements
                         and provides personalized recommendations for improvement.
+                    </p>
+                    <p style={{ marginTop: '0.5rem' }}>
+                        📧 <strong>Weekly Email Delivery:</strong> Your reports are automatically emailed to you every week.
+                        Look for an email from <em>talentovision.info@gmail.com</em>.
                     </p>
                 </div>
             </div>
