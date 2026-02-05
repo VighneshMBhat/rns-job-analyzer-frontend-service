@@ -8,6 +8,7 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const AUTH_API_URL = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://qagyzk8zze.execute-api.us-east-1.amazonaws.com/Prod'
 const GITHUB_SERVICE_URL = process.env.NEXT_PUBLIC_GITHUB_SERVICE_URL || 'https://12dbzw94lh.execute-api.us-east-1.amazonaws.com/Prod'
 const REPORTS_SERVICE_URL = process.env.NEXT_PUBLIC_REPORTS_SERVICE_URL || 'https://c1pcc0rroh.execute-api.us-east-1.amazonaws.com/Prod'
+const TREND_SERVICE_URL = process.env.NEXT_PUBLIC_TREND_SERVICE_URL || 'https://mi9j34716l.execute-api.eu-north-1.amazonaws.com/Prod'
 
 // --- Supabase Client ---
 export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
@@ -33,6 +34,14 @@ const authAxios = axios.create({
 // --- Axios Instance for GitHub Service ---
 const githubAxios = axios.create({
     baseURL: GITHUB_SERVICE_URL,
+    headers: {
+        'Content-Type': 'application/json'
+    }
+})
+
+// --- Axios Instance for Trend Service ---
+const trendAxios = axios.create({
+    baseURL: TREND_SERVICE_URL,
     headers: {
         'Content-Type': 'application/json'
     }
@@ -381,12 +390,12 @@ export const githubAPI = {
     }
 }
 
-// Job Market Service
+// Job Market Service - Uses Trend Service AWS Lambda
 export const jobMarketAPI = {
     getTrendingRoles: async () => {
         // Try Real API first
         try {
-            return await api.get('/trends/roles')
+            return await trendAxios.get('/api/trends/roles')
         } catch (e) {
             // Fallback Mock Data
             return {
@@ -403,7 +412,7 @@ export const jobMarketAPI = {
 
     getTrendingSkills: async () => {
         try {
-            return await api.get('/trends/skills')
+            return await trendAxios.get('/api/trends/skills')
         } catch (e) {
             return {
                 data: [
@@ -419,7 +428,7 @@ export const jobMarketAPI = {
 
     getMarketSnapshot: async () => {
         try {
-            return await api.get('/trends/snapshot')
+            return await trendAxios.get('/api/trends/snapshot')
         } catch (e) {
             return {
                 data: {
@@ -435,64 +444,36 @@ export const jobMarketAPI = {
     }
 }
 
-// ML Analysis Service
+// ML Analysis Service - Fallback service (use skillGapAPI for actual analysis)
 export const mlAPI = {
     analyzeSkillGap: async (targetRole, resumeUrl) => {
-        try {
-            return await api.post('/analysis/gap', { targetRole, resumeUrl })
-        } catch (e) {
-            await new Promise(resolve => setTimeout(resolve, 2000))
-            return {
-                data: {
-                    targetRole,
-                    gapPercentage: 35,
-                    roleFitScore: 65,
-                    marketDemandScore: 88,
-                    trendDirection: 'rising',
-                    missingSkills: [
-                        { skill: 'TensorFlow', importance: 0.85, priority: 1 },
-                        { skill: 'Kubernetes', importance: 0.70, priority: 2 },
-                        { skill: 'CI/CD', importance: 0.60, priority: 3 }
-                    ],
-                    matchedSkills: [
-                        { skill: 'Python', proficiency: 4 },
-                        { skill: 'Git', proficiency: 5 },
-                        { skill: 'SQL', proficiency: 3 }
-                    ],
-                    partialSkills: [
-                        { skill: 'Docker', userLevel: 2, requiredLevel: 4 }
-                    ],
-                    recommendations: {
-                        learningPath: [
-                            'Complete "Deep Learning Specialization" on Coursera',
-                            'Build a project using Kubernetes directly',
-                            'Set up a GitHub Actions pipeline for your ML model'
-                        ],
-                        resources: [
-                            { title: 'TensorFlow Documentation', url: 'https://www.tensorflow.org/' },
-                            { title: 'Kubernetes Basics', url: 'https://kubernetes.io/docs/tutorials/kubernetes-basics/' }
-                        ]
-                    }
-                }
+        // This is a fallback - prefer using skillGapAPI.generateAnalysis()
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        return {
+            data: {
+                targetRole,
+                gapPercentage: null,
+                roleFitScore: null,
+                marketDemandScore: null,
+                trendDirection: null,
+                missingSkills: [],
+                matchedSkills: [],
+                partialSkills: [],
+                recommendations: null
             }
         }
     },
 
     getLatestAnalysis: async () => {
-        // Return mock analysis or null
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // Return null to indicate no analysis - dashboard will check Supabase
         return {
-            data: {
-                gapPercentage: 35,
-                roleFitScore: 65,
-                lastAnalyzed: new Date().toISOString()
-            }
+            data: null
         }
     }
 }
 
 // Skill Gap Analysis Service (AWS Lambda - Per INTEGRATION.md)
-const SKILLGAP_SERVICE_URL = process.env.NEXT_PUBLIC_SKILLGAP_SERVICE_URL || 'https://tku29qrthd.execute-api.us-east-1.amazonaws.com/Prod'
+const SKILLGAP_SERVICE_URL = process.env.NEXT_PUBLIC_SKILLGAP_SERVICE_URL || 'https://b3i7wj2g6j.execute-api.eu-north-1.amazonaws.com/Prod'
 
 const skillGapAxios = axios.create({
     baseURL: SKILLGAP_SERVICE_URL,
