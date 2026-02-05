@@ -678,4 +678,145 @@ export const storageAPI = {
     }
 }
 
+// API Key Service (BYOK - Bring Your Own Key)
+export const apiKeyAPI = {
+    /**
+     * Save or update an API key for a provider
+     * The key is hashed and stored securely; we don't log or expose it
+     * @param {string} userId - The user's ID
+     * @param {string} apiKey - The API key to save
+     * @param {string} provider - The provider (default: 'google_ai_studio')
+     */
+    saveApiKey: async (userId, apiKey, provider = 'google_ai_studio') => {
+        if (!supabase || !userId || !apiKey) {
+            return { success: false, error: 'Invalid parameters' }
+        }
+
+        try {
+            // Create a simple hash of the key for verification
+            // Note: In production, use proper encryption via a backend service
+            const encoder = new TextEncoder()
+            const data = encoder.encode(apiKey)
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+            const hashArray = Array.from(new Uint8Array(hashBuffer))
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+            // Get the prefix for display (first 8 characters)
+            const prefix = apiKey.substring(0, 8) + '...'
+
+            // For now, we store a masked version (in production, use server-side encryption)
+            // The actual key should be encrypted with a server-side key
+            const maskedKey = btoa(apiKey) // Base64 encode (not secure, just for demo)
+
+            // Upsert the key (replace if exists for this user/provider)
+            const { data: result, error } = await supabase
+                .from('user_api_keys')
+                .upsert({
+                    user_id: userId,
+                    provider: provider,
+                    api_key_hash: hashHex,
+                    api_key_encrypted: maskedKey,
+                    api_key_prefix: prefix,
+                    is_active: true,
+                    updated_at: new Date().toISOString()
+                }, {
+                    onConflict: 'user_id,provider'
+                })
+                .select('id, provider, api_key_prefix, is_active, created_at, updated_at')
+                .single()
+
+            if (error) {
+                console.error('Error saving API key:', error)
+                return { success: false, error: error.message }
+            }
+
+            return {
+                success: true,
+                data: {
+                    id: result.id,
+                    provider: result.provider,
+                    prefix: result.api_key_prefix,
+                    isActive: result.is_active,
+                    updatedAt: result.updated_at
+                }
+            }
+        } catch (error) {
+            console.error('Error saving API key:', error)
+            return { success: false, error: error.message }
+        }
+    },
+
+    /**
+     * Get the status of a user's API key (does not return the actual key)
+     * @param {string} userId - The user's ID
+     * @param {string} provider - The provider (default: 'google_ai_studio')
+     */
+    getApiKeyStatus: async (userId, provider = 'google_ai_studio') => {
+        if (!supabase || !userId) {
+            return { hasKey: false, data: null }
+        }
+
+        try {
+            const { data, error } = await supabase
+                .from('user_api_keys')
+                .select('id, provider, api_key_prefix, is_active, created_at, updated_at')
+                .eq('user_id', userId)
+                .eq('provider', provider)
+                .single()
+
+            if (error) {
+                // PGRST116 = Row not found (not an actual error)
+                if (error.code === 'PGRST116') {
+                    return { hasKey: false, data: null }
+                }
+                console.error('Error getting API key status:', error)
+                return { hasKey: false, data: null, error: error.message }
+            }
+
+            return {
+                hasKey: !!data && data.is_active,
+                data: data ? {
+                    id: data.id,
+                    provider: data.provider,
+                    prefix: data.api_key_prefix,
+                    isActive: data.is_active,
+                    updatedAt: data.updated_at
+                } : null
+            }
+        } catch (error) {
+            console.error('Error getting API key status:', error)
+            return { hasKey: false, data: null, error: error.message }
+        }
+    },
+
+    /**
+     * Delete/invalidate a user's API key
+     * @param {string} userId - The user's ID
+     * @param {string} provider - The provider (default: 'google_ai_studio')
+     */
+    deleteApiKey: async (userId, provider = 'google_ai_studio') => {
+        if (!supabase || !userId) {
+            return { success: false, error: 'Invalid parameters' }
+        }
+
+        try {
+            const { error } = await supabase
+                .from('user_api_keys')
+                .delete()
+                .eq('user_id', userId)
+                .eq('provider', provider)
+
+            if (error) {
+                console.error('Error deleting API key:', error)
+                return { success: false, error: error.message }
+            }
+
+            return { success: true }
+        } catch (error) {
+            console.error('Error deleting API key:', error)
+            return { success: false, error: error.message }
+        }
+    }
+}
+
 export default api

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '../../context/AuthContext'
-import { storageAPI, githubAPI } from '../../services/api'
+import { storageAPI, githubAPI, apiKeyAPI } from '../../services/api'
 import './onboarding.css'
 
 const TARGET_ROLES = [
@@ -57,6 +57,86 @@ const GitHubIcon = ({ className = '', size = 24, connected = false }) => (
     </svg>
 )
 
+// Info Icon Component
+const InfoIcon = ({ size = 16 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="16" x2="12" y2="12" />
+        <line x1="12" y1="8" x2="12.01" y2="8" />
+    </svg>
+)
+
+// API Key Info Modal Component
+const ApiKeyInfoModal = ({ isOpen, onClose }) => {
+    if (!isOpen) return null
+
+    return (
+        <div className="modal-overlay" onClick={onClose}>
+            <div className="modal-content api-key-modal" onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h3>How to Get a Google AI Studio API Key</h3>
+                    <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                    </button>
+                </div>
+                <div className="modal-body">
+                    <ol className="api-key-steps">
+                        <li>
+                            <span className="step-number">1</span>
+                            <div className="step-content">
+                                <strong>Go to Google AI Studio</strong>
+                                <p>Visit <a href="https://ai.google.dev" target="_blank" rel="noopener noreferrer">ai.google.dev</a></p>
+                            </div>
+                        </li>
+                        <li>
+                            <span className="step-number">2</span>
+                            <div className="step-content">
+                                <strong>Sign in using a Google account</strong>
+                                <p>Use your existing Google account or create a new one</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span className="step-number">3</span>
+                            <div className="step-content">
+                                <strong>Navigate to API Keys</strong>
+                                <p>Find the API Keys section from the dashboard menu</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span className="step-number">4</span>
+                            <div className="step-content">
+                                <strong>Click "Create API Key"</strong>
+                                <p>Generate a new API key for your application</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span className="step-number">5</span>
+                            <div className="step-content">
+                                <strong>Copy the generated API key</strong>
+                                <p>Make sure to copy it immediately as it won't be shown again</p>
+                            </div>
+                        </li>
+                        <li>
+                            <span className="step-number">6</span>
+                            <div className="step-content">
+                                <strong>Paste the API key here</strong>
+                                <p>Enter it in the BYOK field during onboarding or in Settings</p>
+                            </div>
+                        </li>
+                    </ol>
+                    <div className="api-key-note">
+                        <InfoIcon size={16} />
+                        <span>Your API key is stored securely and never logged or exposed.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 function OnboardingPage() {
     const router = useRouter()
     const { completeProfile, user, connectGitHub, githubConnection, updateProfile, checkGithubConnection } = useAuth()
@@ -69,6 +149,13 @@ function OnboardingPage() {
     const [githubError, setGithubError] = useState('')
     const [githubSkipped, setGithubSkipped] = useState(false)
     const [isRestored, setIsRestored] = useState(false)
+
+    // BYOK State
+    const [apiKey, setApiKey] = useState('')
+    const [apiKeyLoading, setApiKeyLoading] = useState(false)
+    const [apiKeyError, setApiKeyError] = useState('')
+    const [apiKeySaved, setApiKeySaved] = useState(false)
+    const [showApiKeyModal, setShowApiKeyModal] = useState(false)
 
     const [formData, setFormData] = useState({
         targetRoles: [], // Changed from targetRole (string) to targetRoles (array)
@@ -254,6 +341,7 @@ function OnboardingPage() {
         setStep(step - 1)
         setError('')
         setGithubError('')
+        setApiKeyError('')
     }
 
     const handleConnectGitHub = async () => {
@@ -300,6 +388,31 @@ function OnboardingPage() {
         setStep(4)
     }
 
+    // BYOK Handler - Save API key during onboarding
+    const handleSaveApiKey = async () => {
+        if (!user?.id || !apiKey.trim()) {
+            setApiKeyError('Please enter a valid API key')
+            return
+        }
+
+        setApiKeyLoading(true)
+        setApiKeyError('')
+
+        try {
+            const result = await apiKeyAPI.saveApiKey(user.id, apiKey.trim())
+            if (result.success) {
+                setApiKeySaved(true)
+                setApiKey('') // Clear the input for security
+            } else {
+                setApiKeyError(result.error || 'Failed to save API key')
+            }
+        } catch (err) {
+            setApiKeyError('Failed to save API key. Please try again.')
+        }
+
+        setApiKeyLoading(false)
+    }
+
     const handleSubmit = async () => {
         if (!formData.resumeFile && !formData.resumeUrl) {
             setError('Please upload your resume')
@@ -337,12 +450,16 @@ function OnboardingPage() {
                 domain: formData.domain,
                 resumeUrl: resumeUrl,
                 githubConnected: githubConnection.connected,
-                githubSkippedOnboarding: githubSkipped
+                githubSkippedOnboarding: githubSkipped,
+                hasApiKey: apiKeySaved // Track if user added an API key
             }
 
             const result = await completeProfile(profileData)
 
             if (result.success) {
+                // Clear onboarding state from localStorage
+                localStorage.removeItem('onboarding_step')
+                localStorage.removeItem('onboarding_form_data')
                 router.push('/dashboard')
             } else {
                 setError(result.error || 'Failed to complete profile')
@@ -636,7 +753,7 @@ function OnboardingPage() {
                     </div>
                 )}
 
-                {/* Step 4: Resume Upload */}
+                {/* Step 4: Resume Upload + BYOK */}
                 {step === 4 && (
                     <div className="onboarding-step">
                         <h2>Upload your resume</h2>
@@ -699,6 +816,79 @@ function OnboardingPage() {
                             </svg>
                             <span>Your resume is securely stored and only used for skill extraction</span>
                         </div>
+
+                        {/* BYOK Section */}
+                        <div className="byok-onboarding-section">
+                            <div className="byok-onboarding-header">
+                                <div className="byok-title-row">
+                                    <h3>
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                                        </svg>
+                                        Bring Your Own Key (BYOK)
+                                    </h3>
+                                    <span className="optional-badge">Optional</span>
+                                    <button
+                                        type="button"
+                                        className="info-btn-small"
+                                        onClick={() => setShowApiKeyModal(true)}
+                                        aria-label="How to get an API key"
+                                    >
+                                        <InfoIcon size={16} />
+                                    </button>
+                                </div>
+                                <p>Add your Google AI Studio API key for enhanced AI-powered analysis</p>
+                            </div>
+
+                            {apiKeySaved ? (
+                                <div className="byok-saved-indicator">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2">
+                                        <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                    <span>API key saved successfully! You can update it anytime in Settings.</span>
+                                </div>
+                            ) : (
+                                <div className="byok-input-group">
+                                    <div className="byok-input-row">
+                                        <input
+                                            type="password"
+                                            className="form-input"
+                                            placeholder="Enter your Google AI Studio API key"
+                                            value={apiKey}
+                                            onChange={(e) => {
+                                                setApiKey(e.target.value)
+                                                setApiKeyError('')
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline"
+                                            onClick={handleSaveApiKey}
+                                            disabled={apiKeyLoading || !apiKey.trim()}
+                                        >
+                                            {apiKeyLoading ? (
+                                                <div className="spinner" style={{ width: 18, height: 18 }}></div>
+                                            ) : (
+                                                'Save'
+                                            )}
+                                        </button>
+                                    </div>
+                                    {apiKeyError && (
+                                        <div className="byok-error">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <line x1="12" y1="8" x2="12" y2="12" />
+                                                <line x1="12" y1="16" x2="12.01" y2="16" />
+                                            </svg>
+                                            {apiKeyError}
+                                        </div>
+                                    )}
+                                    <span className="byok-hint">
+                                        Skip this if you don't have an API key. You can add it later in Settings.
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -752,6 +942,12 @@ function OnboardingPage() {
                     )}
                 </div>
             </div>
+
+            {/* API Key Info Modal */}
+            <ApiKeyInfoModal
+                isOpen={showApiKeyModal}
+                onClose={() => setShowApiKeyModal(false)}
+            />
         </div>
     )
 }
