@@ -7,6 +7,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const AUTH_API_URL = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://qagyzk8zze.execute-api.us-east-1.amazonaws.com/Prod'
 const GITHUB_SERVICE_URL = process.env.NEXT_PUBLIC_GITHUB_SERVICE_URL || 'https://12dbzw94lh.execute-api.us-east-1.amazonaws.com/Prod'
+const REPORTS_SERVICE_URL = process.env.NEXT_PUBLIC_REPORTS_SERVICE_URL || 'https://c1pcc0rroh.execute-api.us-east-1.amazonaws.com/Prod'
 
 // --- Supabase Client ---
 export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY)
@@ -857,41 +858,26 @@ export const reportAPI = {
             }
 
             // Call the reports delivery service to send email
-            // For now, we'll update the report status and use the Edge Function approach
-            // The reports_service will pick this up on next run
+            // The backend handles fetching report details and sending email
 
-            // Alternative: Direct call to reports service endpoint (if deployed)
-            const REPORTS_SERVICE_URL = process.env.NEXT_PUBLIC_REPORTS_SERVICE_URL
-
+            // Direct call to reports service endpoint
             if (REPORTS_SERVICE_URL) {
                 try {
-                    const response = await fetch(`${REPORTS_SERVICE_URL}/send-email`, {
+                    const response = await fetch(`${REPORTS_SERVICE_URL}/send-report/${reportId}`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            report_id: reportId,
-                            user_email: userEmail,
-                            download_url: signedUrlData.signedUrl,
-                            filename: report.report_filename
-                        })
+                        headers: { 'Content-Type': 'application/json' }
                     })
 
-                    if (response.ok) {
-                        // Update report status
-                        await supabase
-                            .from('reports')
-                            .update({
-                                email_sent: true,
-                                email_sent_at: new Date().toISOString(),
-                                email_recipient: userEmail,
-                                status: 'sent'
-                            })
-                            .eq('id', reportId)
+                    const result = await response.json()
 
-                        return { success: true, message: `Report sent to ${userEmail}` }
+                    if (response.ok && result.success) {
+                        // Update report status in local state (backend updates DB)
+                        return { success: true, message: `Report will be sent to ${userEmail}` }
+                    } else if (result.error === 'Email already sent for this report') {
+                        return { success: true, message: 'Email was already sent for this report' }
                     }
                 } catch (serviceError) {
-                    console.warn('Reports service not available, using fallback')
+                    console.warn('Reports service call failed, using fallback:', serviceError)
                 }
             }
 
