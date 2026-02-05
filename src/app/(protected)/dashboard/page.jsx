@@ -21,6 +21,7 @@ function DashboardPageContent() {
         recentJobs: [],
         jobCount: 0,
         userSkills: [],
+        userSkillsCount: 0,
         reportsCount: 0
     })
 
@@ -87,18 +88,31 @@ function DashboardPageContent() {
             if (!user?.onboardingCompleted) return
 
             try {
-                // Fetch from existing APIs
-                const [analysisRes, rolesRes, snapshotRes] = await Promise.all([
-                    mlAPI.getLatestAnalysis(),
-                    jobMarketAPI.getTrendingRoles(),
-                    jobMarketAPI.getMarketSnapshot()
-                ])
+                // Fetch from existing APIs (with fallbacks)
+                let analysisData = null
+                let rolesData = []
+                let snapshotData = null
+
+                try {
+                    const [analysisRes, rolesRes, snapshotRes] = await Promise.all([
+                        mlAPI.getLatestAnalysis(),
+                        jobMarketAPI.getTrendingRoles(),
+                        jobMarketAPI.getMarketSnapshot()
+                    ])
+                    analysisData = analysisRes.data
+                    rolesData = rolesRes.data?.slice(0, 5) || []
+                    snapshotData = snapshotRes.data
+                } catch (apiError) {
+                    console.warn('API fetch failed, using Supabase data:', apiError)
+                }
 
                 // Fetch dynamic data from Supabase
                 let recentJobs = []
                 let jobCount = 0
                 let userSkills = []
                 let reportsCount = 0
+                let skillGapAnalysis = null
+                let userSkillsCount = 0
 
                 if (supabase) {
                     // Get job count
@@ -115,8 +129,29 @@ function DashboardPageContent() {
                         .limit(5)
                     recentJobs = jobs || []
 
-                    // Get user skills (if any)
+                    // Get user-specific data
                     if (user?.id) {
+                        // Get latest skill gap analysis for user
+                        const { data: analysisFromDb } = await supabase
+                            .from('skill_gap_analyses')
+                            .select('gap_percentage, role_fit_score, matched_skills, missing_skills, target_job_title, analyzed_at')
+                            .eq('user_id', user.id)
+                            .order('analyzed_at', { ascending: false })
+                            .limit(1)
+                            .single()
+
+                        if (analysisFromDb) {
+                            skillGapAnalysis = analysisFromDb
+                        }
+
+                        // Get user skills count
+                        const { count: skillsCount } = await supabase
+                            .from('user_skills')
+                            .select('*', { count: 'exact', head: true })
+                            .eq('user_id', user.id)
+                        userSkillsCount = skillsCount || 0
+
+                        // Get user skills for display
                         const { data: skills } = await supabase
                             .from('user_skills')
                             .select('skill_name, skill_source, proficiency_level')
@@ -134,12 +169,13 @@ function DashboardPageContent() {
                 }
 
                 setData({
-                    latestAnalysis: analysisRes.data,
-                    trendingRoles: rolesRes.data.slice(0, 5),
-                    marketSnapshot: snapshotRes.data,
+                    latestAnalysis: skillGapAnalysis || analysisData,
+                    trendingRoles: rolesData,
+                    marketSnapshot: snapshotData,
                     recentJobs,
                     jobCount,
                     userSkills,
+                    userSkillsCount,
                     reportsCount
                 })
             } catch (error) {
@@ -161,7 +197,10 @@ function DashboardPageContent() {
         )
     }
 
-    const { latestAnalysis, trendingRoles, marketSnapshot, recentJobs, jobCount, userSkills, reportsCount } = data
+    const { latestAnalysis, trendingRoles, marketSnapshot, recentJobs, jobCount, userSkills, userSkillsCount, reportsCount } = data
+
+    // Check if user has run skill gap analysis
+    const hasAnalysis = latestAnalysis && (latestAnalysis.gap_percentage !== undefined || latestAnalysis.gapPercentage !== undefined)
 
     return (
         <div className="dashboard-page">
@@ -220,13 +259,17 @@ function DashboardPageContent() {
                     </div>
                     <div className="stat-content">
                         <span className="stat-label">Skill Gap</span>
-                        <span className="stat-value">{latestAnalysis?.gapPercentage || 35}%</span>
-                        <span className="stat-change negative">↓ 7% from last week</span>
-                    </div>
-                    <div className="stat-chart">
-                        <svg viewBox="0 0 100 40">
-                            <path d="M0 35 L20 30 L40 32 L60 25 L80 20 L100 15" fill="none" stroke="currentColor" strokeWidth="2" />
-                        </svg>
+                        {hasAnalysis ? (
+                            <>
+                                <span className="stat-value">{Math.round(latestAnalysis.gap_percentage || latestAnalysis.gapPercentage || 0)}%</span>
+                                <span className="stat-change">Based on your analysis</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="stat-value stat-value-muted">--</span>
+                                <span className="stat-change">Run analysis to see</span>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -239,14 +282,25 @@ function DashboardPageContent() {
                     </div>
                     <div className="stat-content">
                         <span className="stat-label">Role Fit Score</span>
-                        <span className="stat-value">{latestAnalysis?.roleFitScore || 65}%</span>
-                        <span className="stat-change positive">↑ 12% improvement</span>
+                        {hasAnalysis ? (
+                            <>
+                                <span className="stat-value">{Math.round(latestAnalysis.role_fit_score || latestAnalysis.roleFitScore || 0)}%</span>
+                                <span className="stat-change positive">Your match score</span>
+                            </>
+                        ) : (
+                            <>
+                                <span className="stat-value stat-value-muted">--</span>
+                                <span className="stat-change">Run analysis to see</span>
+                            </>
+                        )}
                     </div>
-                    <div className="stat-progress">
-                        <div className="progress">
-                            <div className="progress-bar" style={{ width: `${latestAnalysis?.roleFitScore || 65}%` }}></div>
+                    {hasAnalysis && (
+                        <div className="stat-progress">
+                            <div className="progress">
+                                <div className="progress-bar" style={{ width: `${latestAnalysis.role_fit_score || latestAnalysis.roleFitScore || 0}%` }}></div>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="stat-card stat-card-accent">
@@ -256,9 +310,9 @@ function DashboardPageContent() {
                         </svg>
                     </div>
                     <div className="stat-content">
-                        <span className="stat-label">Skills Tracked</span>
-                        <span className="stat-value">{marketSnapshot?.totalSkills || 320}</span>
-                        <span className="stat-change">Across market</span>
+                        <span className="stat-label">Your Skills</span>
+                        <span className="stat-value">{userSkillsCount || 0}</span>
+                        <span className="stat-change">{userSkillsCount > 0 ? 'From your profile' : 'Upload resume to extract'}</span>
                     </div>
                 </div>
 
@@ -271,7 +325,7 @@ function DashboardPageContent() {
                     </div>
                     <div className="stat-content">
                         <span className="stat-label">Jobs Analyzed</span>
-                        <span className="stat-value">{jobCount || 41}+</span>
+                        <span className="stat-value">{jobCount}+</span>
                         <span className="stat-change">Updated daily</span>
                     </div>
                 </div>
@@ -286,30 +340,37 @@ function DashboardPageContent() {
                         <Link href="/skill-gap" className="card-link">View all →</Link>
                     </div>
                     <div className="skills-list">
-                        {[
-                            { skill: 'TensorFlow', importance: 85, priority: 'High' },
-                            { skill: 'PyTorch', importance: 80, priority: 'High' },
-                            { skill: 'Kubernetes', importance: 65, priority: 'Medium' },
-                            { skill: 'MLOps', importance: 60, priority: 'Medium' }
-                        ].map((item, index) => (
-                            <div key={index} className="skill-item">
-                                <div className="skill-info">
-                                    <span className="skill-name">{item.skill}</span>
-                                    <span className={`skill-priority priority-${item.priority.toLowerCase()}`}>
-                                        {item.priority}
-                                    </span>
-                                </div>
-                                <div className="skill-bar">
-                                    <div className="progress">
-                                        <div
-                                            className="progress-bar"
-                                            style={{ width: `${item.importance}%`, background: 'var(--gradient-accent)' }}
-                                        ></div>
+                        {hasAnalysis && latestAnalysis.missing_skills && latestAnalysis.missing_skills.length > 0 ? (
+                            latestAnalysis.missing_skills.slice(0, 4).map((item, index) => (
+                                <div key={index} className="skill-item">
+                                    <div className="skill-info">
+                                        <span className="skill-name">{typeof item === 'string' ? item : item.name || item.skill}</span>
+                                        <span className={`skill-priority priority-${item.priority?.toLowerCase() || (index < 2 ? 'high' : 'medium')}`}>
+                                            {item.priority || (index < 2 ? 'High' : 'Medium')}
+                                        </span>
                                     </div>
-                                    <span className="skill-percentage">{item.importance}%</span>
+                                    <div className="skill-bar">
+                                        <div className="progress">
+                                            <div
+                                                className="progress-bar"
+                                                style={{ width: `${item.importance || item.score || (85 - index * 10)}%`, background: 'var(--gradient-accent)' }}
+                                            ></div>
+                                        </div>
+                                        <span className="skill-percentage">{item.importance || item.score || (85 - index * 10)}%</span>
+                                    </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="empty-skills-state">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="40" height="40">
+                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                                </svg>
+                                <p>Run a skill gap analysis to see which skills you need to learn</p>
+                                <Link href="/trends" className="btn btn-primary btn-sm">
+                                    Analyze My Skills
+                                </Link>
                             </div>
-                        ))}
+                        )}
                     </div>
                 </div>
 
