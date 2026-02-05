@@ -1,15 +1,13 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { mlAPI, jobMarketAPI, storageAPI } from '../../../services/api'
+import { useState, useEffect } from 'react'
+import { mlAPI, jobMarketAPI } from '../../../services/api'
 import './skill-gap.css'
 
 function SkillGapPage() {
-    const fileInputRef = useRef(null)
     const [loading, setLoading] = useState(false)
     const [analyzing, setAnalyzing] = useState(false)
     const [selectedRole, setSelectedRole] = useState('')
-    const [resumeFile, setResumeFile] = useState(null)
     const [analysis, setAnalysis] = useState(null)
     const [roles, setRoles] = useState([])
 
@@ -25,24 +23,12 @@ function SkillGapPage() {
         fetchRoles()
     }, [])
 
-    const handleFileChange = (e) => {
-        const file = e.target.files[0]
-        if (file && file.type === 'application/pdf') {
-            setResumeFile(file)
-        }
-    }
-
     const handleAnalyze = async () => {
         if (!selectedRole) return
 
         setAnalyzing(true)
         try {
-            // TODO: Upload resume if provided
-            if (resumeFile) {
-                await storageAPI.uploadResume(resumeFile)
-            }
-
-            // TODO: Replace with real ML API call
+            // Call ML API to analyze skill gap
             const response = await mlAPI.analyzeSkillGap(selectedRole)
             setAnalysis(response.data)
         } catch (error) {
@@ -76,26 +62,7 @@ function SkillGapPage() {
                                 </option>
                             ))}
                         </select>
-                    </div>
-
-                    <div className="form-group">
-                        <label className="form-label">Resume (Optional)</label>
-                        <div
-                            className={`file-input ${resumeFile ? 'has-file' : ''}`}
-                            onClick={() => fileInputRef.current?.click()}
-                        >
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".pdf"
-                                onChange={handleFileChange}
-                            />
-                            {resumeFile ? (
-                                <span className="file-name">{resumeFile.name}</span>
-                            ) : (
-                                <span className="file-placeholder">Click to upload PDF</span>
-                            )}
-                        </div>
+                        <span className="form-hint">Your resume skills will be compared against this role's requirements</span>
                     </div>
                 </div>
 

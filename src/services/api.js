@@ -311,6 +311,57 @@ export const githubAPI = {
             console.error('Error fetching user skills:', error)
             return { success: false, data: [], error: error.message }
         }
+    },
+
+    /**
+     * Get user's GitHub repositories with README and extracted skills
+     * Fetches from github_repos table and joins with user_skills
+     */
+    getRepositories: async (userId) => {
+        if (!supabase) {
+            return { success: false, data: [], error: 'Supabase not configured' }
+        }
+
+        try {
+            // Fetch repositories
+            const { data: repos, error: repoError } = await supabase
+                .from('github_repos')
+                .select('id, repo_name, repo_full_name, repo_url, readme_content, last_processed_at, created_at')
+                .eq('user_id', userId)
+                .order('last_processed_at', { ascending: false })
+
+            if (repoError) throw repoError
+
+            // Fetch all skills for this user that came from GitHub
+            const { data: skills, error: skillsError } = await supabase
+                .from('user_skills')
+                .select('skill_name, source_repo, confidence_score, proficiency_level')
+                .eq('user_id', userId)
+                .eq('source', 'github')
+
+            if (skillsError) throw skillsError
+
+            // Map skills to their respective repos
+            const reposWithSkills = (repos || []).map(repo => {
+                const repoSkills = (skills || []).filter(skill =>
+                    skill.source_repo === repo.repo_name ||
+                    skill.source_repo === repo.repo_full_name
+                )
+                return {
+                    ...repo,
+                    skills: repoSkills.map(s => ({
+                        name: s.skill_name,
+                        confidence: s.confidence_score,
+                        proficiency: s.proficiency_level
+                    }))
+                }
+            })
+
+            return { success: true, data: reposWithSkills }
+        } catch (error) {
+            console.error('Error fetching repositories:', error)
+            return { success: false, data: [], error: error.message }
+        }
     }
 }
 
@@ -748,6 +799,105 @@ export const reportAPI = {
     viewReport: (signedUrl) => {
         if (typeof window !== 'undefined' && signedUrl) {
             window.open(signedUrl, '_blank')
+        }
+    },
+
+    /**
+     * Send a report to user's email
+     * This triggers immediate email delivery for a specific report
+     * @param {string} reportId - The report ID
+     * @param {string} userId - The user's ID
+     * @param {string} userEmail - The user's email address
+     */
+    sendReportEmail: async (reportId, userId, userEmail) => {
+        if (!supabase || !reportId || !userId) {
+            return { success: false, error: 'Invalid parameters' }
+        }
+
+        try {
+            // Get the report details
+            const { data: report, error: reportError } = await supabase
+                .from('reports')
+                .select('id, report_url, report_filename, email_sent')
+                .eq('id', reportId)
+                .eq('user_id', userId)
+                .single()
+
+            if (reportError || !report) {
+                return { success: false, error: 'Report not found' }
+            }
+
+            // If email was already sent, return success with message
+            if (report.email_sent) {
+                return { success: true, message: 'Email was already sent for this report' }
+            }
+
+            // Generate a signed URL for the report
+            const { data: signedUrlData, error: signedError } = await supabase.storage
+                .from('reports')
+                .createSignedUrl(report.report_url, 86400) // 24 hour validity
+
+            if (signedError || !signedUrlData) {
+                return { success: false, error: 'Failed to generate download link' }
+            }
+
+            // Call the reports delivery service to send email
+            // For now, we'll update the report status and use the Edge Function approach
+            // The reports_service will pick this up on next run
+
+            // Alternative: Direct call to reports service endpoint (if deployed)
+            const REPORTS_SERVICE_URL = process.env.NEXT_PUBLIC_REPORTS_SERVICE_URL
+
+            if (REPORTS_SERVICE_URL) {
+                try {
+                    const response = await fetch(`${REPORTS_SERVICE_URL}/send-email`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            report_id: reportId,
+                            user_email: userEmail,
+                            download_url: signedUrlData.signedUrl,
+                            filename: report.report_filename
+                        })
+                    })
+
+                    if (response.ok) {
+                        // Update report status
+                        await supabase
+                            .from('reports')
+                            .update({
+                                email_sent: true,
+                                email_sent_at: new Date().toISOString(),
+                                email_recipient: userEmail,
+                                status: 'sent'
+                            })
+                            .eq('id', reportId)
+
+                        return { success: true, message: `Report sent to ${userEmail}` }
+                    }
+                } catch (serviceError) {
+                    console.warn('Reports service not available, using fallback')
+                }
+            }
+
+            // Fallback: Mark for email on next cron run by setting a flag
+            // For immediate sending, use Supabase Edge Function (if configured)
+            await supabase
+                .from('reports')
+                .update({
+                    email_recipient: userEmail,
+                    status: 'pending_email'
+                })
+                .eq('id', reportId)
+
+            return {
+                success: true,
+                message: `Report will be emailed to ${userEmail} shortly`,
+                pending: true
+            }
+        } catch (error) {
+            console.error('Send email failed:', error)
+            return { success: false, error: error.message }
         }
     }
 }

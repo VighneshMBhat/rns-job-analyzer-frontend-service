@@ -142,11 +142,15 @@ function SettingsPage() {
         }
     }, [user, formData.email])
 
-    // Refresh GitHub connection status on mount
+    // Always refresh GitHub connection status when Settings page loads
     useEffect(() => {
-        if (user?.id) {
-            checkGithubConnection(user.id)
+        const refreshGithubStatus = async () => {
+            if (user?.id) {
+                // Force a fresh check from the database
+                await checkGithubConnection(user.id)
+            }
         }
+        refreshGithubStatus()
     }, [user?.id, checkGithubConnection])
 
     // Fetch resume info on mount
@@ -634,7 +638,7 @@ function SettingsPage() {
                                     <div className="spinner" style={{ width: 24, height: 24 }}></div>
                                     <span>Checking GitHub connection...</span>
                                 </div>
-                            ) : githubConnection.connected ? (
+                            ) : (githubConnection.connected || user?.githubConnected) ? (
                                 <div className="github-connected-section">
                                     <div className="github-status-card connected">
                                         <div className="github-status-icon">
@@ -650,14 +654,14 @@ function SettingsPage() {
                                                     Connected
                                                 </span>
                                             </div>
-                                            <p>Connected as <strong>@{githubConnection.data?.github_username}</strong></p>
+                                            <p>Connected as <strong>@{githubConnection.data?.github_username || user?.githubUsername || 'user'}</strong></p>
                                             <div className="github-meta">
                                                 <span>
                                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                         <circle cx="12" cy="12" r="10" />
                                                         <polyline points="12 6 12 12 16 14" />
                                                     </svg>
-                                                    Last synced: {formatLastSync(githubConnection.data?.last_sync_at)}
+                                                    Last synced: {formatLastSync(githubConnection.data?.last_sync_at || user?.githubConnectedAt)}
                                                 </span>
                                                 {githubConnection.data?.repos_analyzed > 0 && (
                                                     <span>
