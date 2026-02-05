@@ -215,6 +215,7 @@ export const githubAPI = {
     /**
      * Check if user has connected GitHub
      * Queries the github_connections table via Supabase
+     * Falls back to profiles table if no connection found
      * Returns: { connected: boolean, data: { github_username, last_sync_at } | null }
      */
     checkConnection: async (userId) => {
@@ -224,30 +225,44 @@ export const githubAPI = {
         }
 
         try {
+            // First try github_connections table
             const { data, error } = await supabase
                 .from('github_connections')
                 .select('github_username, github_user_id, last_sync_at, repos_analyzed')
                 .eq('user_id', userId)
                 .single()
 
-            if (error) {
-                // PGRST116 = Row not found (not an actual error in this context)
-                if (error.code === 'PGRST116') {
-                    return { connected: false, data: null }
+            if (!error && data) {
+                return {
+                    connected: true,
+                    data: {
+                        github_username: data.github_username,
+                        github_user_id: data.github_user_id,
+                        last_sync_at: data.last_sync_at,
+                        repos_analyzed: data.repos_analyzed
+                    }
                 }
-                console.error('Error checking GitHub connection:', error)
-                return { connected: false, data: null, error: error.message }
             }
 
-            return {
-                connected: !!data,
-                data: data ? {
-                    github_username: data.github_username,
-                    github_user_id: data.github_user_id,
-                    last_sync_at: data.last_sync_at,
-                    repos_analyzed: data.repos_analyzed
-                } : null
+            // Fallback: Check profiles table for github_username
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('github_username, github_connected_at')
+                .eq('id', userId)
+                .single()
+
+            if (!profileError && profileData?.github_username) {
+                return {
+                    connected: true,
+                    data: {
+                        github_username: profileData.github_username,
+                        last_sync_at: profileData.github_connected_at
+                    }
+                }
             }
+
+            // No GitHub connection found
+            return { connected: false, data: null }
         } catch (error) {
             console.error('Error checking GitHub connection:', error)
             return { connected: false, data: null, error: error.message }
