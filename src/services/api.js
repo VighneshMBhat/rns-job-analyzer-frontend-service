@@ -224,57 +224,63 @@ export const githubAPI = {
 
     /**
      * Check if user has connected GitHub
-     * Queries the github_connections table via Supabase
-     * Falls back to profiles table if no connection found
+     * Uses the GitHub service API to check connection status
+     * This avoids RLS issues with direct Supabase calls
      * Returns: { connected: boolean, data: { github_username, last_sync_at } | null }
      */
     checkConnection: async (userId) => {
-        if (!supabase) {
-            console.warn('Supabase client not configured')
+        if (!userId) {
+            console.warn('No userId provided for GitHub connection check')
             return { connected: false, data: null }
         }
 
         try {
-            // First try github_connections table
-            const { data, error } = await supabase
-                .from('github_connections')
-                .select('github_username, github_user_id, last_sync_at, repos_analyzed')
-                .eq('user_id', userId)
-                .single()
+            // Use the GitHub service API instead of direct Supabase calls
+            // This avoids RLS policy issues (406 errors)
+            const response = await githubAxios.get(`/api/github/status/${userId}`)
 
-            if (!error && data) {
+            if (response.data && response.data.connected) {
                 return {
                     connected: true,
                     data: {
-                        github_username: data.github_username,
-                        github_user_id: data.github_user_id,
-                        last_sync_at: data.last_sync_at,
-                        repos_analyzed: data.repos_analyzed
+                        github_username: response.data.github_username,
+                        github_user_id: response.data.github_user_id,
+                        github_avatar_url: response.data.github_avatar_url,
+                        github_email: response.data.github_email,
+                        last_sync_at: response.data.last_sync_at,
+                        repos_analyzed: response.data.repos_analyzed,
+                        connected_at: response.data.connected_at
                     }
                 }
             }
 
-            // Fallback: Check profiles table for github_username
-            const { data: profileData, error: profileError } = await supabase
-                .from('profiles')
-                .select('github_username, github_connected_at')
-                .eq('id', userId)
-                .single()
-
-            if (!profileError && profileData?.github_username) {
-                return {
-                    connected: true,
-                    data: {
-                        github_username: profileData.github_username,
-                        last_sync_at: profileData.github_connected_at
-                    }
-                }
-            }
-
-            // No GitHub connection found
             return { connected: false, data: null }
         } catch (error) {
-            console.error('Error checking GitHub connection:', error)
+            console.error('Error checking GitHub connection via API:', error)
+
+            // Fallback: Try Supabase profiles table if API fails
+            if (supabase) {
+                try {
+                    const { data: profileData, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('github_username, github_connected_at')
+                        .eq('id', userId)
+                        .single()
+
+                    if (!profileError && profileData?.github_username) {
+                        return {
+                            connected: true,
+                            data: {
+                                github_username: profileData.github_username,
+                                last_sync_at: profileData.github_connected_at
+                            }
+                        }
+                    }
+                } catch (fallbackError) {
+                    console.error('Fallback profile check also failed:', fallbackError)
+                }
+            }
+
             return { connected: false, data: null, error: error.message }
         }
     },
